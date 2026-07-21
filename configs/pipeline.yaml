@@ -1,0 +1,4 @@
+pipeline:
+  name: posts
+  mode: incremental
+  source_path: data/raw/posts.csv

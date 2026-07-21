@@ -62,40 +62,153 @@ The same codebase can run on:
 
 ## Project Structure
 
+
 ```
 dataflow-project/
 │
 ├── src/
-│ └── dataflow/
-│ ├── bronze/
-│ │ ├── posts.py
-│ │ ├── users.py
-│ │
-│ ├── silver/
-│ │ ├── posts.py
-│ │
-│ ├── gold/
-│ │ ├── analytics.py
-│ │ ├── tags.py
-│ │
-│ ├── common/
-│ │ ├── spark.py
-│ │ ├── io.py
-│ │ ├── config.py
+│   └── dataflow/
+│       │
+│       ├── bronze/
+│       │   ├── posts.py             #  production ingestion 
+│       │   ├── users.py             # empty 
+│       │
+│       ├── silver/
+│       │   ├── posts.py             # empty 
+│       │
+│       ├── gold/
+│       │   ├── analytics.py         # empty 
+│       │   ├── tags.py              # empty 
+│       │
+│       ├── common/
+│       │   ├── spark.py             # empty 
+│       │   ├── io.py                # empty 
+│       │   ├── config.py            # empty 
+│       │   ├── state.py            # empty 
+│       │   ├── logger.py           # empty 
+│       │   ├── schema_registry.py  # empty 
+│
+├── data/
+│   ├── Posts.xml               # my data source 
+│   ├── Users.xml           # my data source 
 │
 ├── pipelines/
-│ ├── bronze_posts.py
-│ ├── silver_posts.py
-│ ├── gold_analytics.py
+│   │
+│   ├── bronze/
+│   │   ├── posts.py                # calls src/dataflow/bronze/posts.run()
+│   │   ├── users.py                # empty 
+│   │
+│   ├── silver/
+│   │   ├── posts.py                # empty 
+│   │
+│   ├── gold/
+│   │   ├── analytics.py
+│   │
+│   ├── run_all.py                  # empty 
 │
 ├── orchestration/
-│ ├── airflow_dags/
-│ ├── databricks_jobs/
+│   │
+│   ├── airflow_dags/
+│   │   ├── posts_dag.py            # empty 
+│   │
+│   ├── databricks_jobs/
+│   │   ├── bronze_posts_job.json   # empty 
 │
 ├── configs/
-│ ├── pipeline.yaml
+│   ├── pipeline.yaml               # empty 
+│   ├── environments.yaml           # empty 
+│
+├── notebooks/
+│   ├── exploration/
+│   │   ├── bronze_posts.ipynb     # only for experimentation
+│   │   ├── bronze_users.ipynb
 │
 ├── tests/
+│   ├── bronze/
+│   │   ├── test_posts.py          # empty
+│   │
+│   ├── silver/
+│   ├── gold/
+│
+├── scripts/
+│   ├── run_bronze_posts.py        # empty
+│   ├── run_silver_posts.py
+│
+├── requirements.txt
+└── README.md
+```
+
+
+
+```
+dataflow-project/
+│
+├── src/
+│   └── dataflow/
+│       │
+│       ├── bronze/
+│       │   ├── posts.py             #  production ingestion 
+│       │   ├── users.py             # (to be upgraded next)
+│       │
+│       ├── silver/
+│       │   ├── posts.py             # (next layer: cleaning + joins)
+│       │
+│       ├── gold/
+│       │   ├── analytics.py         # (KPIs / business metrics)
+│       │   ├── tags.py              # (aggregations / insights)
+│       │
+│       ├── common/
+│       │   ├── spark.py             # Spark session factory (NEW responsibility)
+│       │   ├── io.py                # read/write utilities (NEW abstraction layer)
+│       │   ├── config.py            # YAML loader (config-driven pipelines)
+│       │   ├── state.py            # NEW: pipeline state tracking (watermarks)
+│       │   ├── logger.py           # EW: metrics + logging
+│       │   ├── schema_registry.py  # (future: schema versioning)
+│
+├── pipelines/
+│   │
+│   ├── bronze/
+│   │   ├── posts.py                # calls src/dataflow/bronze/posts.run()
+│   │   ├── users.py                # same pattern (to implement next)
+│   │
+│   ├── silver/
+│   │   ├── posts.py                # orchestration layer only
+│   │
+│   ├── gold/
+│   │   ├── analytics.py
+│   │
+│   ├── run_all.py                  # (optional: full DAG-like execution entrypoint)
+│
+├── orchestration/
+│   │
+│   ├── airflow_dags/
+│   │   ├── posts_dag.py            # DAG calling bronze → silver → gold
+│   │
+│   ├── databricks_jobs/
+│   │   ├── bronze_posts_job.json   # job definitions
+│
+├── configs/
+│   ├── pipeline.yaml               # now actually used (source, tables, mode)
+│   ├── environments.yaml           # (dev/staging/prod configs - optional next step)
+│
+├── notebooks/
+│   ├── exploration/
+│   │   ├── bronze_posts.ipynb     # only for experimentation
+│   │   ├── bronze_users.ipynb
+│   │
+│   ├── deprecated/
+│   │   ├── bronze_posts_old.ipynb # move old logic here (important discipline)
+│
+├── tests/
+│   ├── bronze/
+│   │   ├── test_posts.py          # schema + validation tests
+│   │
+│   ├── silver/
+│   ├── gold/
+│
+├── scripts/
+│   ├── run_bronze_posts.py        # local execution entrypoint
+│   ├── run_silver_posts.py
 │
 ├── requirements.txt
 └── README.md
