@@ -1,0 +1,20 @@
+# dbt connection profile.
+#
+# Kept in the project (not ~/.dbt/) so the repo is self-contained: clone, and
+# `dbt build` works with no per-machine setup. Invoke with
+# `dbt build --project-dir dbt --profiles-dir dbt`.
+#
+# There are no secrets here — DuckDB is a local file. That is the whole reason
+# this can be committed at all.
+
+dataflow:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # The analytics database. Bronze stays in Delta (spark-warehouse/);
+      # silver and gold live here.
+      path: "dataflow.duckdb"
+      # DuckDB reads the bronze Delta table via this extension.
+      extensions:
+        - delta

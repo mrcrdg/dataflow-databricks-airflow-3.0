@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: stg_posts
+    description: >
+      One row per post, cleaned and typed. Tags are an array; post type is
+      labelled. This is the silver layer — everything downstream builds on it.
+    columns:
+      - name: post_id
+        description: Primary key. Renamed from the source's Id.
+        data_tests:
+          - unique
+          - not_null
+      - name: post_type_id
+        description: Raw type code from the source.
+        data_tests:
+          - not_null
+      - name: post_type
+        description: Human label for post_type_id, or 'Unknown' if unmapped.
+        data_tests:
+          # Never null because stg_posts coalesces unmapped ids to 'Unknown'.
+          # The test pins that guarantee.
+          - not_null
+      - name: tags_array
+        description: >
+          Tags as an array of strings. NULL for posts with no tags (answers),
+          never an empty array — see the singular test
+          assert_stg_posts_no_empty_tag_arrays.

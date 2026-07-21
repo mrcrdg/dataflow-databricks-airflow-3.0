@@ -28,3 +28,6 @@ logs/
 
 # Scratch notes, not part of the project
 comprehension.txt
+
+# dbt local state
+dbt/.user.yml

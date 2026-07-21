@@ -20,6 +20,11 @@ dev = [
 orchestration = [
     "apache-airflow==3.2.0",
 ]
+# dbt transforms bronze into silver and gold. dbt-duckdb reads the Delta table
+# the Spark bronze job writes, via DuckDB's delta extension.
+dbt = [
+    "dbt-duckdb>=1.9",
+]
 
 [build-system]
 requires = ["hatchling"]

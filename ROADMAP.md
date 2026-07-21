@@ -21,7 +21,7 @@ Everything downstream is SQL, so it belongs in dbt.
 | 1 | Repo hygiene — packaging, `uv`, `.gitignore` | done |
 | 2 | Single entrypoint + real `common/` (Spark factory, config loader) | todo |
 | 3 | Tests for the bronze layer | todo |
-| 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | todo |
+| 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | in progress — stg_posts + marts_top_tags done; marts_posts_users needs bronze users |
 | 5 | Airflow 3 + Cosmos orchestration | todo |
 | 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | todo |
 

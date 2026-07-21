@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: marts_top_tags
+    description: >
+      The top N tags by distinct post count (N = top_tags_limit, default 100),
+      ordered most-used first with tag as a deterministic tiebreaker.
+    columns:
+      - name: tag
+        description: The tag.
+        data_tests:
+          - unique
+          - not_null
+      - name: post_count
+        description: Number of distinct posts carrying the tag.
+        data_tests:
+          - not_null
