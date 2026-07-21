@@ -25,6 +25,9 @@ packages = ["src/dataflow"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Notebooks are frozen Databricks prototypes, not maintained source.
+# They reference globals the platform injects (spark, dbutils, display).
+extend-exclude = ["notebooks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,4 +1,18 @@
-pipeline:
-  name: posts
-  mode: incremental
-  source_path: data/raw/posts.csv
+# Pipeline configuration.
+#
+# Read by dataflow.common.config. Paths and table names must not be hardcoded
+# in Python — if a job needs a new knob, it goes here.
+
+spark:
+  app_name: dataflow
+  warehouse_dir: ./spark-warehouse
+
+bronze:
+  posts:
+    source_path: data/ai.stackexchange.com/Posts.xml
+    root_tag: posts
+    row_tag: row
+    table: bronze.posts
+    # Bronze is a full refresh of the raw dump. Incremental loading belongs
+    # downstream, in dbt incremental models. See ROADMAP.md.
+    write_mode: overwrite
