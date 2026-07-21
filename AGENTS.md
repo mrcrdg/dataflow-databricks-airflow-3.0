@@ -45,6 +45,39 @@ is deliberately out of scope. See `ROADMAP.md`.
 - Logging via `dataflow.common.logging.get_logger()`, `%s` placeholders, no
   f-strings in log calls.
 
+## Decision points — required format
+
+**Never ask a yes/no question without first stating the trade-off.**
+
+Anyone being asked to decide is usually skimming, and often does not hold the
+same context as whoever is asking. A bare "shall I proceed?" pushes the work of
+reconstructing that context onto the reader, who is the person least equipped to
+do it. The implications matter at every step.
+
+Before any yes/no question, give:
+
+1. **What changed** — plain language, no jargon, no file dumps.
+2. **What it means** — why it matters in practice.
+3. **The consequence of each option** — including what happens if the answer is
+   no, and what is hard to undo.
+
+Recommend one option and say why. A decision framed without a recommendation is
+just the work handed back.
+
+> **What changed:** `clean_columns` now strips only leading underscores instead
+> of all underscores.
+> **What it means:** identical output for today's data — no source column has an
+> internal underscore — but a column like `user_id` would survive intact where
+> before it became `userid`.
+> **If yes:** behaviour is pinned by a test; safe.
+> **If no:** the old version stays; it works now but would silently mangle names
+> if the source schema ever changes.
+> **Recommendation:** yes — same result today, fewer surprises later.
+
+This applies to commits, deletions, dependency changes, and schema changes —
+anything not trivially reversible. Deletions especially: say what is lost and how
+to get it back.
+
 ## Commands
 
 ```bash
