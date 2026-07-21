@@ -13,15 +13,48 @@ from typing import Any
 
 import yaml
 
-# Repo root: src/dataflow/common/config.py -> up 3 -> project root.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_CONFIG_PATH = _REPO_ROOT / "configs" / "pipeline.yaml"
+CONFIG_ENV_VAR = "DATAFLOW_CONFIG"
+_CONFIG_RELATIVE_PATH = Path("configs") / "pipeline.yaml"
+
+
+def _search_upwards(start: Path) -> Path | None:
+    """Walk up from `start` looking for configs/pipeline.yaml."""
+    for directory in (start, *start.parents):
+        candidate = directory / _CONFIG_RELATIVE_PATH
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def config_path() -> Path:
-    """Path to the active config file. Override with DATAFLOW_CONFIG."""
-    override = os.environ.get("DATAFLOW_CONFIG")
-    return Path(override) if override else _DEFAULT_CONFIG_PATH
+    """Locate the active config file.
+
+    Resolution order:
+
+    1. The DATAFLOW_CONFIG environment variable, if set. This is the escape
+       hatch for deployments and for tests pointing at a fixture.
+    2. Search upwards from this module's location — finds it in a normal
+       source checkout or an editable install.
+    3. Search upwards from the current working directory — covers the case
+       where the package is installed non-editable (into site-packages, where
+       there is no repo above it) but the process runs from the project.
+
+    Deliberately not a fixed `parents[N]` hop: that only works for one install
+    layout, and fails confusingly under any other.
+    """
+    override = os.environ.get(CONFIG_ENV_VAR)
+    if override:
+        return Path(override)
+
+    found = _search_upwards(Path(__file__).resolve().parent) or _search_upwards(Path.cwd().resolve())
+    if found is not None:
+        return found
+
+    raise FileNotFoundError(
+        f"Could not locate {_CONFIG_RELATIVE_PATH} by searching upwards from "
+        f"{Path(__file__).resolve().parent} or {Path.cwd().resolve()}. "
+        f"Set {CONFIG_ENV_VAR} to point at it explicitly."
+    )
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
@@ -40,7 +73,10 @@ def job_config(layer: str, job: str, path: str | Path | None = None) -> dict[str
     try:
         return config[layer][job]
     except (KeyError, TypeError):
-        raise KeyError(f"No config for '{layer}.{job}' in {path or config_path()}") from None
+        # Report where we looked; a missing job and a wrong config file look
+        # identical from the caller's side otherwise.
+        location = path if path is not None else config_path()
+        raise KeyError(f"No config for '{layer}.{job}' in {location}") from None
 
 
 def spark_config(path: str | Path | None = None) -> dict[str, Any]:

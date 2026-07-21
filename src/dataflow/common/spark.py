@@ -12,6 +12,10 @@ from __future__ import annotations
 from delta import configure_spark_with_delta_pip
 from pyspark.sql import SparkSession
 
+from dataflow.common.logging import get_logger
+
+logger = get_logger("dataflow.common.spark")
+
 DEFAULT_APP_NAME = "dataflow"
 DEFAULT_WAREHOUSE_DIR = "./spark-warehouse"
 
@@ -32,9 +36,22 @@ def get_spark(
     if existing is not None:
         # A session already exists — this is the Databricks path, where the
         # platform provides one. We cannot rebuild it, but the timezone must
-        # hold there too, otherwise the same code produces different timestamps
+        # hold here too, otherwise the same code produces different timestamps
         # depending on where it runs.
-        existing.conf.set("spark.sql.session.timeZone", SESSION_TIMEZONE)
+        #
+        # That session may be shared with other jobs on the same cluster, so
+        # this is a side effect on state we do not own. We still apply it —
+        # ingestion is wrong without it — but never silently: if the session
+        # disagrees with us, say so loudly enough to be traceable.
+        current = existing.conf.get("spark.sql.session.timeZone", None)
+        if current != SESSION_TIMEZONE:
+            logger.warning(
+                "Overriding spark.sql.session.timeZone on a pre-existing session: %s -> %s. "
+                "This session may be shared; the change is global and is not reverted.",
+                current,
+                SESSION_TIMEZONE,
+            )
+            existing.conf.set("spark.sql.session.timeZone", SESSION_TIMEZONE)
         return existing
 
     builder = (

@@ -58,6 +58,23 @@ Planned shape when picked up: a separate materialized `enrichment` layer,
 computed once outside dbt, exposed to dbt as a source — keeping the dbt DAG
 fully deterministic.
 
+### Containerisation
+
+There was a `Dockerfile`. It was deleted, not fixed, because it did not work and
+nothing in the repo would have told you so:
+
+- it installed `pyspark` and `delta-spark` unpinned, on top of a base image that
+  already contained PySpark 3.5.0, ignoring `pyproject.toml` and `uv.lock`
+- it never installed `pyyaml`, so every pipeline died on `import yaml`
+- `PYTHONPATH=/app` was wrong for a `src/` layout — `import dataflow` failed
+
+No CI built the image, so none of that surfaced. **A container that ships broken
+is worse than no container**: it invites someone to trust it.
+
+When this comes back it should arrive with a CI job that builds the image and
+runs the pipeline inside it. Until something exercises it, it will drift — the
+same way `pipeline.yaml` drifted into describing a CSV that never existed.
+
 ### Not planned
 
 - **Streaming** — the source is a static XML dump. Streaming would be theatre.

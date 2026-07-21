@@ -22,3 +22,9 @@ logs/
 # Tooling
 .pytest_cache/
 .ruff_cache/
+
+# Local Claude Code session state (settings, worktrees)
+.claude/
+
+# Scratch notes, not part of the project
+comprehension.txt

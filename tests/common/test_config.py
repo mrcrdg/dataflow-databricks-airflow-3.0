@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from dataflow.common.config import config_path, job_config, load_config, spark_config
+from dataflow.common.config import (
+    _search_upwards,
+    config_path,
+    job_config,
+    load_config,
+    spark_config,
+)
 
 SAMPLE = """
 spark:
@@ -70,6 +76,38 @@ def test_env_var_overrides_config_location(tmp_path, monkeypatch):
 
     assert config_path() == custom
     assert load_config()["spark"]["app_name"] == "test-app"
+
+
+def test_search_upwards_finds_config_from_a_nested_directory(tmp_path):
+    """Resolution must not depend on how deep the caller happens to be."""
+    root = tmp_path / "project"
+    (root / "configs").mkdir(parents=True)
+    expected = root / "configs" / "pipeline.yaml"
+    expected.write_text("bronze:\n  posts:\n    table: t\n", encoding="utf-8")
+
+    nested = root / "src" / "dataflow" / "common"
+    nested.mkdir(parents=True)
+
+    assert _search_upwards(nested) == expected
+
+
+def test_search_upwards_returns_none_when_there_is_no_config(tmp_path):
+    assert _search_upwards(tmp_path) is None
+
+
+def test_config_path_resolves_with_no_env_var_set(monkeypatch):
+    """The default path must work in a plain checkout, without configuration.
+
+    Previously this was a fixed parents[3] hop from __file__, which only held
+    for an editable install; a non-editable install resolved to somewhere
+    inside site-packages.
+    """
+    monkeypatch.delenv("DATAFLOW_CONFIG", raising=False)
+
+    resolved = config_path()
+
+    assert resolved.is_file()
+    assert resolved.name == "pipeline.yaml"
 
 
 def test_real_config_is_valid_and_complete():
