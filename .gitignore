@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Data & build artifacts (source data is downloaded, not committed)
+data/
+spark-warehouse/
+output/
+*.duckdb
+
+# Spark
+metastore_db/
+derby.log
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+
+# Local Claude Code session state (settings, worktrees)
+.claude/
+
+# Scratch notes, not part of the project
+comprehension.txt

@@ -1,0 +1,39 @@
+[project]
+name = "dataflow"
+version = "0.1.0"
+description = "Medallion lakehouse over the ai.stackexchange.com data dump"
+requires-python = ">=3.12"
+dependencies = [
+    "pyspark==4.1.1",
+    "delta-spark==4.2.0",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+# Orchestration is opt-in: `uv sync --group orchestration`.
+# Airflow pulls ~200MB of transitive deps and is not needed to run a pipeline
+# locally, so it stays out of the default install.
+orchestration = [
+    "apache-airflow==3.2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dataflow"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Notebooks are frozen Databricks prototypes, not maintained source.
+# They reference globals the platform injects (spark, dbutils, display).
+extend-exclude = ["notebooks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
