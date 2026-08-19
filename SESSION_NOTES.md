@@ -34,7 +34,12 @@ anyone who clones it.
   and a full `dbt build` against the result, followed by an assertion on the row
   counts. Nothing generated is committed. The fixture join covers the
   `unresolved` author branch that the real dump never produces.
-- **Tests** — 57 pytest tests + 20 dbt tests, all green. `ruff` clean.
+- **Project report** — `docs/lakehouse-report.html`, a self-contained page
+  explaining the project from first principles for a reader seeing it cold:
+  glossary, three diagrams, status, what is left. `tests/docs/` asserts its
+  structural claims against the repo so it cannot drift; its measured figures
+  are a dated snapshot and are not re-checked.
+- **Tests** — 65 pytest tests + 20 dbt tests, all green. `ruff` clean.
 - **Docs** — `AGENTS.md` in every directory, `ROADMAP.md`, `README.md`, and
   `docs/adr/0001` (UTC timezone), `0002` (delete unexercised artifacts),
   `0003` (resolve config paths against the project root).
@@ -92,7 +97,7 @@ uv pip install -e . --no-deps                    # make `dataflow` importable
 python pipelines/bronze_posts.py                 # bronze: Posts.xml -> Delta (26,764 rows)
 python pipelines/bronze_users.py                 # bronze: Users.xml -> Delta (71,811 rows)
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + 20 dbt tests
-pytest                                           # 57 tests, ~2min
+pytest                                           # 65 tests, ~2min
 ruff check .                                     # lint
 ```
 

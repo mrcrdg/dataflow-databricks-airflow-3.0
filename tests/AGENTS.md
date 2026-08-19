@@ -15,6 +15,7 @@ bronze/test_posts.py    ingestion: schema, transforms, Delta round-trip
 bronze/test_users.py    same, plus null-vs-blank and the UTC storage check
 common/test_config.py   config loading and path resolution, no Spark
 orchestration/          DAG parses, Cosmos renders, graph is the intended shape
+docs/                   the project report still describes this repo
 ```
 
 ## Two kinds of test, kept apart
@@ -70,6 +71,11 @@ why they are written down:
 - `test_ci_config_points_at_fixtures_that_exist` — CI ingests those files and
   then runs the whole dbt project against the result. A renamed fixture would
   otherwise surface as a CI failure in a step whose job was to prevent one.
+- `tests/docs/` — the project report is prose, and prose is what has drifted in
+  this repo three times. Its *structural* claims (models, entry points, ADR
+  numbers, row-count baselines) are asserted against the repo. Its measured
+  figures are not: the report is a dated snapshot and says so, and a snapshot
+  that was true when taken is a record rather than drift.
 
 ## Known baselines
 

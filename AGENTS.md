@@ -3,6 +3,10 @@
 Orientation for anyone (human or AI agent) working in this repo. Directory-level
 `AGENTS.md` files add detail; this one covers the whole project.
 
+For an explanation aimed at a human reading the project cold — what it is, why
+it is shaped this way, what is done and what is left — see
+`docs/lakehouse-report.html`.
+
 ## What this project is
 
 A medallion lakehouse over the [ai.stackexchange.com](https://archive.org/details/stackexchange)

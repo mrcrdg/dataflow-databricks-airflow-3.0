@@ -1,0 +1,1462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="What the Stack Exchange lakehouse pipeline is, what works, and what is left — with the jargon explained.">
+<!--
+  A dated snapshot of the project, written for a first-time reader.
+
+  Self-contained on purpose: no build step, no local assets, no JavaScript.
+  Open it in a browser straight from the repo.
+
+  Structural claims here — model names, entry points, ADR numbers, the row-count
+  baselines — are asserted against the repo by
+  tests/docs/test_lakehouse_report.py, so this file cannot quietly drift out of
+  step with the code. Measured figures (durations, test counts) are true as of
+  the date in the footer and are not re-checked.
+-->
+<title>Stack Exchange Lakehouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  /* ---------------------------------------------------------------
+     Light palette is the complete set. Dark redefines tokens only.
+     --------------------------------------------------------------- */
+  :root {
+    --ground:      #F4F6F8;
+    --surface:     #FFFFFF;
+    --surface-2:   #EDF0F4;
+    --ink:         #161A22;
+    --ink-soft:    #3D4654;
+    --muted:       #626D7E;
+    --rule:        #D6DBE3;
+    --rule-strong: #B8C0CC;
+
+    --accent:      #0B6E80;
+    --accent-soft: #E2F0F3;
+
+    --bronze:      #9C5F27;
+    --silver:      #6B7889;
+    --gold:        #96770F;
+
+    --done:        #2C7049;
+    --done-bg:     #E3F1E8;
+    --todo:        #8A5B00;
+    --todo-bg:     #F7EDD9;
+    --bad:         #B03A2E;
+
+    --shadow: 0 1px 2px rgba(22, 26, 34, .05), 0 6px 20px -12px rgba(22, 26, 34, .22);
+
+    --measure: 68ch;
+    --wide: 1000px;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0C1015;
+      --surface:     #151B23;
+      --surface-2:   #1D242E;
+      --ink:         #E7EBF1;
+      --ink-soft:    #C2CAD6;
+      --muted:       #8D98A8;
+      --rule:        #2A323D;
+      --rule-strong: #3C4653;
+
+      --accent:      #4FBDCE;
+      --accent-soft: #12323A;
+
+      --bronze:      #C9873F;
+      --silver:      #96A3B4;
+      --gold:        #C8A538;
+
+      --done:        #5FBF8A;
+      --done-bg:     #16301F;
+      --todo:        #D5A44A;
+      --todo-bg:     #33280F;
+      --bad:         #F07167;
+
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .8);
+
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0C1015;
+    --surface:     #151B23;
+    --surface-2:   #1D242E;
+    --ink:         #E7EBF1;
+    --ink-soft:    #C2CAD6;
+    --muted:       #8D98A8;
+    --rule:        #2A323D;
+    --rule-strong: #3C4653;
+
+    --accent:      #4FBDCE;
+    --accent-soft: #12323A;
+
+    --bronze:      #C9873F;
+    --silver:      #96A3B4;
+    --gold:        #C8A538;
+
+    --done:        #5FBF8A;
+    --done-bg:     #16301F;
+    --todo:        #D5A44A;
+    --todo-bg:     #33280F;
+    --bad:         #F07167;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .8);
+
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* --- typography ------------------------------------------------ */
+
+  h1, h2, h3, h4,
+  .eyebrow, .chip, .label, table, .stat-num, code, .mono {
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  code, .mono, .stat-num, .num {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-ligatures: none;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 3rem);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0 0 .5rem;
+  }
+
+  h2 {
+    font-size: clamp(1.4rem, 3vw, 1.75rem);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h3 {
+    font-size: 1.075rem;
+    font-weight: 600;
+    letter-spacing: -.005em;
+    text-wrap: balance;
+    margin: 0 0 .4rem;
+  }
+
+  p { margin: 0 0 1.1em; max-width: var(--measure); }
+  ul, ol { max-width: var(--measure); padding-left: 1.25em; margin: 0 0 1.1em; }
+  li { margin-bottom: .5em; }
+  li::marker { color: var(--muted); }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  strong { font-weight: 600; color: var(--ink); }
+
+  code {
+    font-size: .85em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: .1em .35em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .eyebrow {
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 .6rem;
+  }
+
+  .lede {
+    font-size: 1.2rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+
+  /* --- header ---------------------------------------------------- */
+
+  header.masthead {
+    padding: clamp(56px, 9vw, 104px) 0 40px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 8px;
+  }
+
+  .masthead .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-top: 28px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .78rem;
+    color: var(--muted);
+  }
+  .masthead .meta span { white-space: nowrap; }
+
+  /* --- sections -------------------------------------------------- */
+
+  section { padding: 52px 0 8px; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    max-width: var(--wide);
+  }
+  .sec-head .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .8rem;
+    font-weight: 500;
+    color: var(--accent);
+    flex: none;
+  }
+
+  /* --- chips ----------------------------------------------------- */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35em;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .2em .6em;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .chip.bronze { color: var(--bronze); }
+  .chip.silver { color: var(--silver); }
+  .chip.gold   { color: var(--gold); }
+
+  .status {
+    display: inline-block;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    padding: .18em .55em;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .status.done { color: var(--done); background: var(--done-bg); }
+  .status.todo { color: var(--todo); background: var(--todo-bg); }
+
+  /* --- cards / panels -------------------------------------------- */
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 20px 24px;
+    margin: 0 0 1.5em;
+  }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout p { max-width: 64ch; }
+
+  .grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 1.5em;
+  }
+  .grid.two   { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+  /* --- stats ----------------------------------------------------- */
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1.6em;
+  }
+  .stat { background: var(--surface); padding: 18px 20px; }
+  .stat-num {
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    line-height: 1.15;
+  }
+  .stat-lab {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: .76rem;
+    color: var(--muted);
+    line-height: 1.35;
+    display: block;
+    margin-top: 5px;
+  }
+
+  /* --- tables ---------------------------------------------------- */
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--surface);
+    margin-bottom: 1.6em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: .88rem;
+    min-width: 540px;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* --- glossary -------------------------------------------------- */
+
+  .gloss {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .term {
+    background: var(--surface);
+    padding: 18px 20px;
+  }
+  .term dt {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: .95rem;
+    margin-bottom: .3em;
+    color: var(--ink);
+  }
+  .term dt .also {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: .82rem;
+  }
+  .term dd {
+    margin: 0;
+    font-size: .93rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  /* --- figures / svg --------------------------------------------- */
+
+  figure {
+    margin: 0 0 1.8em;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 26px 24px 18px;
+    box-shadow: var(--shadow);
+  }
+  .fig-scroll { overflow-x: auto; }
+  figure svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    color: var(--ink);
+    min-width: 520px;
+  }
+  figcaption {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-size: .87rem;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 72ch;
+  }
+  figcaption b { color: var(--ink-soft); font-weight: 600; }
+
+  /* svg primitives */
+  .s-box   { fill: var(--surface-2); stroke: var(--rule-strong); stroke-width: 1.5; }
+  .s-box-a { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .s-line  { stroke: var(--rule-strong); stroke-width: 1.5; fill: none; }
+  .s-flow  { stroke: currentColor; stroke-width: 1.75; fill: none; }
+  .s-dash  { stroke: var(--muted); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+  .s-t     { fill: currentColor; font-family: "IBM Plex Sans", sans-serif; font-size: 13px; }
+  .s-tb    { fill: currentColor; font-family: "IBM Plex Sans", sans-serif; font-size: 13px; font-weight: 600; }
+  .s-tm    { fill: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+  .s-ta    { fill: var(--accent); font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; font-weight: 600; }
+  .s-lab   { fill: var(--muted); font-family: "IBM Plex Sans", sans-serif; font-size: 11px; letter-spacing: .08em; }
+  .s-bronze{ fill: var(--bronze); font-family: "IBM Plex Sans", sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+  .s-silver{ fill: var(--silver); font-family: "IBM Plex Sans", sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+  .s-gold  { fill: var(--gold);   font-family: "IBM Plex Sans", sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+  .s-strike{ stroke: var(--bad); stroke-width: 2; }
+  .s-bad   { fill: var(--bad); font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; font-weight: 600; }
+  .s-good  { fill: var(--done); font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; font-weight: 600; }
+
+  /* --- code block ------------------------------------------------ */
+
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .82rem;
+    line-height: 1.7;
+    color: var(--ink-soft);
+    margin: 0 0 1.4em;
+  }
+  pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+    white-space: pre;
+    color: inherit;
+  }
+  pre .c { color: var(--muted); }
+
+  /* --- misc ------------------------------------------------------ */
+
+  hr.soft {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 40px 0;
+  }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: .82rem;
+    color: var(--muted);
+  }
+  footer p { max-width: 72ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Project report · 19 August 2026</p>
+    <h1>Turning a Stack Exchange XML dump into analytics tables</h1>
+    <p class="lede">
+      A data pipeline that reads 191&nbsp;MB of raw forum archive and produces clean,
+      queryable tables — running entirely on a laptop, with no cloud account.
+      This report explains what it is, what works, and what is left.
+    </p>
+    <div class="meta">
+      <span>repo · dataflow-databricks-airflow-3.0</span>
+      <span>branch · refactor/local-first-lakehouse</span>
+      <span>open PR · #3</span>
+      <span>CI · passing</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">01</span>
+      <h2>What this project actually is</h2>
+    </div>
+
+    <p>
+      Stack Exchange — the network that includes Stack Overflow — publishes its entire
+      public content as a free archive. One of its sites is
+      <strong>ai.stackexchange.com</strong>, a question-and-answer forum about artificial
+      intelligence. Its archive is a folder of XML files: one for posts, one for users,
+      one for comments, and so on.
+    </p>
+
+    <p>
+      XML is a text format that stores data as nested tags. It is fine for shipping data
+      around, but you cannot ask it questions. There is no way to say <em>"which tags are
+      most popular?"</em> or <em>"what is the average reputation of people who answer
+      questions?"</em> to a 49&nbsp;MB text file.
+    </p>
+
+    <p>
+      This project builds the machinery that turns those files into <strong>tables</strong> —
+      the rows-and-columns structure that databases understand and that anyone can query
+      with SQL. It does that in deliberate stages, tests each stage, and schedules the
+      whole thing to run as one job.
+    </p>
+
+    <div class="callout">
+      <h3>Why bother, if you could just load the file?</h3>
+      <p>
+        Because the interesting part is not the answer — it is the <em>machinery</em>. The
+        patterns here (staged transformation, explicit schemas, automated tests, scheduled
+        runs, written-down decisions) are what data engineering teams actually build. The
+        dataset is small enough to run on a laptop and large enough that the patterns are
+        not pretend. The project says this about itself, plainly, rather than
+        claiming to handle "big data".
+      </p>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span class="stat-num">26,764</span><span class="stat-lab">forum posts ingested</span></div>
+      <div class="stat"><span class="stat-num">71,811</span><span class="stat-lab">user accounts ingested</span></div>
+      <div class="stat"><span class="stat-num">191 MB</span><span class="stat-lab">raw archive on disk</span></div>
+      <div class="stat"><span class="stat-num">85</span><span class="stat-lab">automated tests, all passing</span></div>
+      <div class="stat"><span class="stat-num">12</span><span class="stat-lab">scheduled pipeline tasks</span></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">02</span>
+      <h2>The vocabulary, defined</h2>
+    </div>
+
+    <p>
+      Data engineering has a dense jargon. Every term below appears later in this report,
+      so here they all are in one place. Skim it now, come back to it when a word bites.
+    </p>
+
+    <dl class="gloss">
+      <div class="term">
+        <dt>Data lakehouse</dt>
+        <dd>A place to store data that combines two older ideas: a <em>data lake</em> (dump
+        raw files anywhere, cheap and flexible) and a <em>data warehouse</em> (strict tables
+        you can query fast). A lakehouse keeps files on cheap storage but adds enough
+        structure that they behave like real database tables.</dd>
+      </div>
+      <div class="term">
+        <dt>Medallion architecture <span class="also">bronze / silver / gold</span></dt>
+        <dd>The convention this project follows for organising a lakehouse into three
+        layers, named after medals to signal increasing refinement. <strong>Bronze</strong>
+        is a faithful copy of the raw source. <strong>Silver</strong> is cleaned and
+        typed. <strong>Gold</strong> is the finished, business-ready output. The value is
+        that each stage has one job, so a bug has one place to live.</dd>
+      </div>
+      <div class="term">
+        <dt>Schema</dt>
+        <dd>The declared shape of a table: which columns exist and what type each one is
+        (whole number, text, timestamp). Declaring it up front means the pipeline fails
+        loudly when the source changes, instead of silently guessing.</dd>
+      </div>
+      <div class="term">
+        <dt>Apache Spark</dt>
+        <dd>An engine for processing data in parallel across many machines. It is heavy
+        machinery, normally used for datasets far larger than this one. Here it is used
+        for exactly one job — reading the XML — because that is the job nothing else in
+        the stack can do.</dd>
+      </div>
+      <div class="term">
+        <dt>Delta Lake <span class="also">"a Delta table"</span></dt>
+        <dd>A file format that makes a folder of data files behave like a proper database
+        table — with a transaction log, so a half-finished write never leaves the table in
+        a broken state. This is the format bronze is written in.</dd>
+      </div>
+      <div class="term">
+        <dt>dbt <span class="also">data build tool</span></dt>
+        <dd>A tool where each transformation is just a <code>SELECT</code> query in a file.
+        dbt works out the order to run them in, tests the results, and generates
+        documentation. It cannot read raw files — it only transforms tables that already
+        exist. That limitation is the reason Spark is in this project at all.</dd>
+      </div>
+      <div class="term">
+        <dt>DuckDB</dt>
+        <dd>A database that runs inside your program as a single file, with no server to
+        install or log into. It is what actually executes the SQL here — the reason the
+        whole project runs on a laptop with no cloud account.</dd>
+      </div>
+      <div class="term">
+        <dt>Apache Airflow <span class="also">and a "DAG"</span></dt>
+        <dd>A scheduler: it runs jobs in the right order, retries the ones that fail, and
+        shows you what happened. The plan it follows is called a <strong>DAG</strong> —
+        <em>directed acyclic graph</em>, which is a formal way of saying "a set of steps
+        with arrows between them and no loops."</dd>
+      </div>
+      <div class="term">
+        <dt>Cosmos</dt>
+        <dd>A plugin that connects Airflow to dbt. Without it, all of dbt is one box in
+        the scheduler — it either worked or it didn't. With it, <em>every individual dbt
+        model becomes its own step</em>, so a failure names the exact model that broke.</dd>
+      </div>
+      <div class="term">
+        <dt>CI <span class="also">continuous integration</span></dt>
+        <dd>A robot that runs the tests automatically every time code changes, on a clean
+        machine that shares none of your local setup. If it passes there, it genuinely
+        passes.</dd>
+      </div>
+      <div class="term">
+        <dt>ADR <span class="also">architecture decision record</span></dt>
+        <dd>A short written note recording a decision, the reasoning behind it, and what
+        it costs. It answers "why on earth is it done this way?" for whoever reads the
+        code in six months — often the same person who wrote it.</dd>
+      </div>
+      <div class="term">
+        <dt>Grain</dt>
+        <dd>What one row of a table represents. "One row per post" is a grain. It matters
+        because a bug that quietly changes the grain — say, to two rows per post —
+        inflates every count computed from that table, without anything looking broken.</dd>
+      </div>
+      <div class="term">
+        <dt>Idempotent</dt>
+        <dd>Running it twice gives the same result as running it once. A pipeline that
+        doubles its data when you retry it is worse than one that simply fails, because
+        nothing alerts you.</dd>
+      </div>
+      <div class="term">
+        <dt>Fixture</dt>
+        <dd>A tiny sample of real data, saved permanently so tests can run against it in
+        seconds. This project uses five real rows each from the posts and users files —
+        real ones, because they carry the awkward cases that hand-written examples tidy
+        away.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">03</span>
+      <h2>How the data moves</h2>
+    </div>
+
+    <p>
+      This is the whole system in one picture. Read it left to right: raw files enter on
+      the left, finished tables leave on the right. The two boxes underneath describe what
+      wraps around the pipeline — the scheduler that runs it, and the robot that checks it.
+    </p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 470" role="img"
+             aria-label="Two XML files are read by Spark into bronze Delta tables, which dbt transforms into silver views and then gold tables. Airflow schedules the whole run; CI verifies it on every change using small fixtures.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- column labels -->
+          <text class="s-lab"    x="20"  y="26">SOURCE</text>
+          <text class="s-bronze" x="248" y="26">BRONZE</text>
+          <text class="s-silver" x="500" y="26">SILVER</text>
+          <text class="s-gold"   x="752" y="26">GOLD</text>
+
+          <!-- layer divider ticks -->
+          <line class="s-line" x1="20"  y1="34" x2="196" y2="34"/>
+          <line class="s-line" x1="248" y1="34" x2="424" y2="34"/>
+          <line class="s-line" x1="500" y1="34" x2="676" y2="34"/>
+          <line class="s-line" x1="752" y1="34" x2="960" y2="34"/>
+
+          <!-- SOURCE -->
+          <rect class="s-box" x="20" y="58"  width="176" height="60" rx="6"/>
+          <text class="s-tb" x="36" y="82">Posts.xml</text>
+          <text class="s-tm" x="36" y="102">49 MB · 26,764 rows</text>
+
+          <rect class="s-box" x="20" y="140" width="176" height="60" rx="6"/>
+          <text class="s-tb" x="36" y="164">Users.xml</text>
+          <text class="s-tm" x="36" y="184">21 MB · 71,811 rows</text>
+
+          <!-- BRONZE -->
+          <rect class="s-box" x="248" y="58"  width="176" height="60" rx="6"/>
+          <text class="s-tb" x="264" y="82">bronze.posts</text>
+          <text class="s-tm" x="264" y="102">Delta table</text>
+
+          <rect class="s-box" x="248" y="140" width="176" height="60" rx="6"/>
+          <text class="s-tb" x="264" y="164">bronze.users</text>
+          <text class="s-tm" x="264" y="184">Delta table</text>
+
+          <!-- SILVER -->
+          <rect class="s-box" x="500" y="58"  width="176" height="60" rx="6"/>
+          <text class="s-tb" x="516" y="82">stg_posts</text>
+          <text class="s-tm" x="516" y="102">cleaned · typed</text>
+
+          <rect class="s-box" x="500" y="140" width="176" height="60" rx="6"/>
+          <text class="s-tb" x="516" y="164">stg_users</text>
+          <text class="s-tm" x="516" y="184">cleaned · typed</text>
+
+          <!-- GOLD -->
+          <rect class="s-box-a" x="752" y="58"  width="208" height="60" rx="6"/>
+          <text class="s-tb" x="768" y="82">marts_top_tags</text>
+          <text class="s-tm" x="768" y="102">100 rows</text>
+
+          <rect class="s-box-a" x="752" y="140" width="208" height="60" rx="6"/>
+          <text class="s-tb" x="768" y="164">marts_posts_users</text>
+          <text class="s-tm" x="768" y="184">26,764 rows</text>
+
+          <!-- arrows: source -> bronze -->
+          <line class="s-flow" x1="196" y1="88"  x2="240" y2="88"  marker-end="url(#ar)"/>
+          <line class="s-flow" x1="196" y1="170" x2="240" y2="170" marker-end="url(#ar)"/>
+          <text class="s-ta" x="200" y="132" text-anchor="middle">Spark</text>
+          <text class="s-tm" x="218" y="146" text-anchor="middle">parses XML</text>
+
+          <!-- arrows: bronze -> silver -->
+          <line class="s-flow" x1="424" y1="88"  x2="492" y2="88"  marker-end="url(#ar)"/>
+          <line class="s-flow" x1="424" y1="170" x2="492" y2="170" marker-end="url(#ar)"/>
+          <text class="s-ta" x="458" y="122" text-anchor="middle">dbt</text>
+          <text class="s-tm" x="458" y="136" text-anchor="middle">reads in place</text>
+
+          <!-- arrows: silver -> gold -->
+          <line class="s-flow" x1="676" y1="76" x2="744" y2="76" marker-end="url(#ar)"/>
+          <path class="s-flow" d="M 676 172 C 712 172, 712 160, 744 160" marker-end="url(#ar)"/>
+          <path class="s-flow" d="M 676 100 C 712 100, 712 150, 744 152" marker-end="url(#ar)"/>
+          <text class="s-ta" x="710" y="120" text-anchor="middle">dbt</text>
+          <text class="s-tm" x="710" y="134" text-anchor="middle">aggregate · join</text>
+
+          <!-- ORCHESTRATION band -->
+          <rect class="s-box" x="20" y="256" width="940" height="86" rx="8"/>
+          <text class="s-lab" x="40" y="282">ORCHESTRATION — APACHE AIRFLOW 3 + COSMOS</text>
+          <text class="s-t"   x="40" y="308">One scheduled run. Two ingestion tasks in parallel, then every dbt model</text>
+          <text class="s-t"   x="40" y="326">as its own retryable step — 12 tasks in all. Verified end to end in 240 s.</text>
+
+          <line class="s-dash" x1="108" y1="210" x2="108" y2="252" marker-end="url(#ar)"/>
+          <line class="s-dash" x1="336" y1="210" x2="336" y2="252" marker-end="url(#ar)"/>
+          <line class="s-dash" x1="588" y1="210" x2="588" y2="252" marker-end="url(#ar)"/>
+          <line class="s-dash" x1="856" y1="210" x2="856" y2="252" marker-end="url(#ar)"/>
+
+          <!-- CI band -->
+          <rect class="s-box" x="20" y="366" width="940" height="86" rx="8"/>
+          <text class="s-lab" x="40" y="392">VERIFICATION — GITHUB ACTIONS, EVERY CHANGE</text>
+          <text class="s-t"   x="40" y="418">Runs the same pipeline against 5-row fixtures instead of the full dump,</text>
+          <text class="s-t"   x="40" y="436">then checks the row counts. 2 min 18 s, all green.</text>
+
+          <line class="s-dash" x1="490" y1="342" x2="490" y2="362" marker-end="url(#ar)"/>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Figure 1 — the whole system.</b> Spark appears once, at the left edge, and never
+        again. Everything to the right of bronze is dbt writing SQL. Note that dbt reads
+        the bronze Delta tables <em>in place</em>: there is no copying step and no second
+        copy of the data to fall out of sync.
+      </figcaption>
+    </figure>
+
+    <div class="callout">
+      <h3>The one decision that explains the whole layout</h3>
+      <p>
+        <strong>Spark handles ingestion. dbt handles everything downstream.</strong>
+      </p>
+      <p>
+        Parsing XML is the single job dbt cannot do — dbt only transforms tables that
+        already exist, it cannot read a file. So Spark earns its place at bronze and
+        nowhere else. The moment the data is a table, the work becomes SQL, and dbt
+        provides tests, dependency ordering, and documentation for free. Rebuilding those
+        in Spark would mean rebuilding dbt, badly.
+      </p>
+      <p>
+        Every other structural choice in the project follows from that one boundary.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">04</span>
+      <h2>What the finished tables contain</h2>
+    </div>
+
+    <p>
+      Four tables come out the far end. The two <em>silver</em> ones are cleaned-up
+      versions of the raw input; the two <em>gold</em> ones answer actual questions.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Table</th>
+            <th>What it holds</th>
+            <th class="num">Rows</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="chip bronze">Bronze</span></td>
+            <td><code>bronze.posts</code></td>
+            <td>Every post, exactly as the archive has it. No cleaning at all — this is the untouched copy you compare against when something looks wrong.</td>
+            <td class="num">26,764</td>
+          </tr>
+          <tr>
+            <td><span class="chip bronze">Bronze</span></td>
+            <td><code>bronze.users</code></td>
+            <td>Every user account, likewise untouched.</td>
+            <td class="num">71,811</td>
+          </tr>
+          <tr>
+            <td><span class="chip silver">Silver</span></td>
+            <td><code>stg_posts</code></td>
+            <td>Posts, cleaned: column names tidied, the pipe-separated tag string split into a proper list, and the numeric post-type code replaced with a readable label ("Question", "Answer").</td>
+            <td class="num">26,764</td>
+          </tr>
+          <tr>
+            <td><span class="chip silver">Silver</span></td>
+            <td><code>stg_users</code></td>
+            <td>Users, cleaned. Blank text fields become genuine nulls, so "we have no location for this person" is distinguishable from "their location is an empty string".</td>
+            <td class="num">71,811</td>
+          </tr>
+          <tr>
+            <td><span class="chip gold">Gold</span></td>
+            <td><code>marts_top_tags</code></td>
+            <td>The most-used tags, ranked by how many posts carry them.</td>
+            <td class="num">100</td>
+          </tr>
+          <tr>
+            <td><span class="chip gold">Gold</span></td>
+            <td><code>marts_posts_users</code></td>
+            <td>Every post joined to the person who wrote it — one wide table so an analyst never has to work out the join themselves.</td>
+            <td class="num">26,764</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      That last row count is not a coincidence, and it is the single most useful number in
+      the project. <code>marts_posts_users</code> must have <em>exactly</em> as many rows as
+      <code>bronze.posts</code>, because its grain is one row per post. Any other number
+      means the join went wrong — and a join going wrong is the kind of bug that inflates
+      every statistic downstream while looking perfectly healthy.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">05</span>
+      <h2>The bug that best explains the whole approach</h2>
+    </div>
+
+    <p>
+      This project began as a set of exploratory notebooks — informal scratch files written
+      while figuring the data out. Converting them into a real pipeline meant reading them
+      carefully, and one of them contained a genuinely instructive defect.
+    </p>
+
+    <p>
+      Each post records the ID number of its author. To attach author details, you
+      <strong>join</strong> the posts table to the users table on that ID. A
+      <strong>left join</strong> means: keep every post, and attach user details where a
+      match exists; where no match exists, leave those columns empty. That is the right
+      choice, because a post whose author deleted their account is still a post.
+    </p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 940 340" role="img"
+             aria-label="The original notebook selected only the user table's ID, so an unmatched post lost its author ID entirely. The fixed version keeps the post's own author ID alongside the matched user ID, plus a status column distinguishing the three cases.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- ---------- BEFORE ---------- -->
+          <text class="s-bad" x="20" y="24">BEFORE — the notebook</text>
+
+          <rect class="s-box" x="20" y="42" width="180" height="76" rx="6"/>
+          <text class="s-tb" x="34" y="66">posts</text>
+          <text class="s-tm" x="34" y="86">post_id</text>
+          <text class="s-tm" x="34" y="104">owner_user_id</text>
+
+          <rect class="s-box" x="252" y="42" width="180" height="76" rx="6"/>
+          <text class="s-tb" x="266" y="66">users</text>
+          <text class="s-tm" x="266" y="86">user_id</text>
+          <text class="s-tm" x="266" y="104">display_name</text>
+
+          <path class="s-flow" d="M 200 80 L 244 80" marker-end="url(#ar2)"/>
+          <text class="s-tm" x="222" y="70" text-anchor="middle">LEFT JOIN</text>
+
+          <!-- output before -->
+          <rect class="s-box" x="20" y="150" width="412" height="118" rx="6"/>
+          <text class="s-tb" x="34" y="174">output — selected columns</text>
+          <text class="s-tm" x="34" y="196">post_id</text>
+          <text class="s-tm" x="34" y="214">user_id     (from the users side)</text>
+          <text class="s-tm" x="34" y="232">display_name</text>
+          <text class="s-tm" x="34" y="250" opacity=".45">owner_user_id — never selected</text>
+          <line class="s-strike" x1="30" y1="246" x2="248" y2="246"/>
+
+          <text class="s-bad" x="20" y="296">When the join misses, the author ID is gone.</text>
+          <text class="s-tm" x="20" y="316">Indistinguishable from a post that never had an author.</text>
+
+          <!-- divider -->
+          <line class="s-line" x1="470" y1="14" x2="470" y2="326"/>
+
+          <!-- ---------- AFTER ---------- -->
+          <text class="s-good" x="500" y="24">AFTER — the dbt model</text>
+
+          <rect class="s-box" x="500" y="42" width="180" height="76" rx="6"/>
+          <text class="s-tb" x="514" y="66">stg_posts</text>
+          <text class="s-tm" x="514" y="86">post_id</text>
+          <text class="s-tm" x="514" y="104">owner_user_id</text>
+
+          <rect class="s-box" x="732" y="42" width="188" height="76" rx="6"/>
+          <text class="s-tb" x="746" y="66">stg_users</text>
+          <text class="s-tm" x="746" y="86">user_id  · unique ✓</text>
+          <text class="s-tm" x="746" y="104">display_name</text>
+
+          <path class="s-flow" d="M 680 80 L 724 80" marker-end="url(#ar2)"/>
+          <text class="s-tm" x="702" y="70" text-anchor="middle">LEFT JOIN</text>
+
+          <rect class="s-box-a" x="500" y="150" width="420" height="118" rx="6"/>
+          <text class="s-tb" x="514" y="174">output — selected columns</text>
+          <text class="s-tm" x="514" y="196">post_id</text>
+          <text class="s-tm" x="514" y="214">owner_user_id  (kept, from the post)</text>
+          <text class="s-tm" x="514" y="232">user_id        (from the match, may be null)</text>
+          <text class="s-tm" x="514" y="250">author_status  resolved / unresolved / anonymous</text>
+
+          <text class="s-good" x="500" y="296">Both IDs survive, so the two failure cases are</text>
+          <text class="s-tm"   x="500" y="316">distinguishable — and named outright.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Figure 2 — what changed in the join.</b> The notebook selected only the users
+        table's ID column. When the join found no match, that column came back empty and
+        the post's own author ID had never been carried through — so a failed lookup and a
+        genuinely author-less post produced identical rows. The rewritten model keeps both
+        columns and adds <code>author_status</code> to say which case each row is.
+      </figcaption>
+    </figure>
+
+    <p>On the real data, that column comes out as:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>author_status</th><th>Meaning</th><th class="num">Posts</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>resolved</code></td><td>The post names an author, and we found them.</td><td class="num">26,307</td></tr>
+          <tr><td><code>anonymous</code></td><td>The post names no author at all.</td><td class="num">457</td></tr>
+          <tr><td><code>unresolved</code></td><td>The post names an author we have no record of.</td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The second defect in the same notebook was quieter: it assumed each user appears only
+      once, without ever checking. If a user ID appeared twice, the join would silently
+      produce two rows for every post that person wrote — inflating every count computed
+      from the table. The fix is a one-line test asserting that user IDs are unique. It has
+      never failed, which is exactly what a good guardrail looks like.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">06</span>
+      <h2>Three more bugs, and the pattern they share</h2>
+    </div>
+
+    <p>
+      Each of these was found during this work, and each is written up as an ADR — a
+      permanent note explaining the decision. What unites them is the failure mode:
+      <strong>nothing crashed</strong>. Row counts looked right, no job reported an error,
+      and the data was wrong anyway.
+    </p>
+
+    <div class="grid two">
+      <div class="panel">
+        <h3>Every timestamp was three hours early</h3>
+        <p style="font-size:.94rem">
+          The archive stores times with no timezone attached; they are UTC by convention.
+          Spark assumed they were in the timezone of whatever computer was running it, and
+          shifted all of them. Nothing failed. It surfaced only when the data was read back
+          through a second engine, where the offset had to be stated explicitly.
+        </p>
+        <p style="font-size:.94rem;margin-bottom:0">
+          <strong>The deeper problem was not accuracy but reproducibility</strong>: the same
+          input produced different output depending on who ran it. Now pinned to UTC, and
+          pinned by a test. <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0001</span>
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>A setting that does nothing</h3>
+        <p style="font-size:.94rem">
+          The XML reader takes two options naming which tags to read. It turns out one of
+          them is ignored entirely on read — only the other actually selects rows. An
+          earlier notebook had it set wrong, copy-pasted from a different file, and worked
+          anyway.
+        </p>
+        <p style="font-size:.94rem;margin-bottom:0">
+          Worth knowing because getting the <em>other</em> one wrong returns zero rows
+          rather than raising an error — a job that writes nothing and reports success.
+          Now covered by a test.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>A database that deleted itself</h3>
+        <p style="font-size:.94rem">
+          Cosmos runs dbt from a temporary folder. Every file path in the project was
+          written relative to the project folder, so under the scheduler they all pointed
+          into that temporary space. dbt would build every table into a scratch database
+          which was then deleted when the task ended.
+        </p>
+        <p style="font-size:.94rem;margin-bottom:0">
+          A completely green pipeline run, producing nothing. Fixed by anchoring paths to
+          the project root rather than to wherever the program happens to be running.
+          <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0003</span>
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Files that lied</h3>
+        <p style="font-size:.94rem">
+          Three files in the repo described things that did not exist: a config naming a
+          CSV that was never there, a README listing files that had been deleted, and a
+          Dockerfile that could not have built. All three were committed, all three looked
+          plausible, and nothing read them — so nothing could report the drift.
+        </p>
+        <p style="font-size:.94rem;margin-bottom:0">
+          The rule adopted in response: <strong>an artifact must be exercised by something
+          automated, or it gets deleted.</strong> Five empty placeholder files were removed
+          under it during this work.
+          <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0002</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p style="margin-bottom:0">
+        Two of these — the timezone and the file paths — are the same bug in different
+        clothing: <strong>behaviour that depends on the machine it runs on</strong>. The
+        host's timezone in one case, the working directory in the other. Both produce
+        output that changes depending on who runs it, and neither announces itself.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">07</span>
+      <h2>How it gets scheduled and checked</h2>
+    </div>
+
+    <p>
+      The pipeline can be run by hand, one command at a time. It can also be run as a
+      single scheduled job, which is what Airflow is for. The interesting detail is how
+      much detail the scheduler can see.
+    </p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 940 360" role="img"
+             aria-label="The Airflow DAG: two parallel ingestion tasks feed a Cosmos-rendered group in which each dbt model is a separate run task followed by its own test task, twelve tasks in total.">
+          <defs>
+            <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- ingestion -->
+          <rect class="s-box-a" x="20" y="86" width="184" height="52" rx="6"/>
+          <text class="s-tb" x="34" y="108">ingest_bronze_posts</text>
+          <text class="s-tm" x="34" y="126">Spark · Posts.xml</text>
+
+          <rect class="s-box-a" x="20" y="188" width="184" height="52" rx="6"/>
+          <text class="s-tb" x="34" y="210">ingest_bronze_users</text>
+          <text class="s-tm" x="34" y="228">Spark · Users.xml</text>
+
+          <text class="s-lab" x="20" y="66">STEP 1 — RUN IN PARALLEL</text>
+          <text class="s-lab" x="264" y="66">STEP 2 — ONE TASK PER dbt MODEL (COSMOS)</text>
+
+          <!-- dbt group frame -->
+          <rect class="s-box" x="264" y="76" width="656" height="188" rx="8" fill="none"/>
+
+          <!-- rows: run -> test pairs -->
+          <g>
+            <rect class="s-box" x="286" y="96" width="150" height="40" rx="5"/>
+            <text class="s-t" x="298" y="121">post_types.seed</text>
+            <rect class="s-box" x="470" y="96" width="150" height="40" rx="5"/>
+            <text class="s-t" x="482" y="121">post_types.test</text>
+            <line class="s-flow" x1="436" y1="116" x2="462" y2="116" marker-end="url(#ar3)"/>
+          </g>
+          <g>
+            <rect class="s-box" x="286" y="146" width="150" height="40" rx="5"/>
+            <text class="s-t" x="298" y="171">stg_posts.run</text>
+            <rect class="s-box" x="470" y="146" width="150" height="40" rx="5"/>
+            <text class="s-t" x="482" y="171">stg_posts.test</text>
+            <line class="s-flow" x1="436" y1="166" x2="462" y2="166" marker-end="url(#ar3)"/>
+            <rect class="s-box-a" x="662" y="146" width="180" height="40" rx="5"/>
+            <text class="s-t" x="674" y="171">marts_top_tags.run</text>
+            <line class="s-flow" x1="620" y1="166" x2="654" y2="166" marker-end="url(#ar3)"/>
+          </g>
+          <g>
+            <rect class="s-box" x="286" y="196" width="150" height="40" rx="5"/>
+            <text class="s-t" x="298" y="221">stg_users.run</text>
+            <rect class="s-box" x="470" y="196" width="150" height="40" rx="5"/>
+            <text class="s-t" x="482" y="221">stg_users.test</text>
+            <line class="s-flow" x1="436" y1="216" x2="462" y2="216" marker-end="url(#ar3)"/>
+            <rect class="s-box-a" x="662" y="196" width="180" height="40" rx="5"/>
+            <text class="s-t" x="674" y="221">marts_posts_users.run</text>
+            <line class="s-flow" x1="620" y1="216" x2="654" y2="216" marker-end="url(#ar3)"/>
+          </g>
+
+          <text class="s-tm" x="662" y="256">…each followed by its own test task</text>
+
+          <!-- fan in -->
+          <path class="s-flow" d="M 204 112 C 232 112, 232 116, 278 116" marker-end="url(#ar3)"/>
+          <path class="s-flow" d="M 204 118 C 232 118, 232 166, 278 166" marker-end="url(#ar3)"/>
+          <path class="s-flow" d="M 204 214 C 232 214, 232 216, 278 216" marker-end="url(#ar3)"/>
+          <path class="s-flow" d="M 204 208 C 232 208, 232 168, 278 168" marker-end="url(#ar3)"/>
+
+          <text class="s-lab" x="20" y="304">TOTAL — 12 TASKS · 240 SECONDS · SCHEDULE: MANUAL TRIGGER ONLY</text>
+          <text class="s-tm"  x="20" y="326">The source is a static archive file, so a nightly schedule would re-read identical bytes every morning.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Figure 3 — the scheduled run.</b> Without Cosmos, everything to the right of the
+        two ingestion tasks would be a single box marked "run dbt". Splitting it out means
+        that when the eleventh step fails you retry the eleventh step, and the failure
+        message names the model.
+      </figcaption>
+    </figure>
+
+    <h3>Why the schedule is set to "never"</h3>
+    <p>
+      Airflow's usual job is to run things on a timetable. Here it is deliberately set to
+      manual-trigger-only, because the source is a static archive file that does not
+      change. A nightly schedule would re-read identical bytes every morning and present
+      that as a working pipeline. It runs when a new archive is downloaded — which is the
+      real cadence.
+    </p>
+
+    <h3>What CI checks, and the trick that makes it possible</h3>
+    <p>
+      The dbt models cannot run without bronze tables, and bronze tables come from a 191&nbsp;MB
+      archive that is far too large to keep in the repository. The obvious workaround —
+      committing a small pre-built table — was rejected, because it would be a generated
+      file that nothing regenerates, free to drift away from what the ingestion code
+      actually produces, with no test able to notice.
+    </p>
+    <p>
+      Instead, CI runs the <em>real</em> ingestion against the five-row fixtures, then
+      points dbt at the result. Nothing generated is stored, and every model and every dbt
+      test runs on every change. The full run takes 2 minutes 18 seconds.
+    </p>
+    <div class="callout">
+      <p style="margin-bottom:0">
+        A useful accident: the posts fixture mentions two author IDs that the users fixture
+        does not contain. So CI produces rows with <code>author_status = 'unresolved'</code>
+        — a case the real archive never produces, since its user list is complete. The tiny
+        test dataset covers a code path the full dataset cannot reach.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">08</span>
+      <h2>Status: what is done</h2>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Stage</th><th>State</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Repo hygiene, packaging, dependency management</td>
+            <td><span class="status done">Done</span></td>
+            <td>Managed with <code>uv</code>; heavy extras are opt-in.</td>
+          </tr>
+          <tr>
+            <td>One entry point per job, config-driven</td>
+            <td><span class="status done">Done</span></td>
+            <td>No path or table name is hardcoded in code.</td>
+          </tr>
+          <tr>
+            <td>Bronze ingestion — posts and users</td>
+            <td><span class="status done">Done</span></td>
+            <td>26,764 and 71,811 rows, both pinned as regression baselines.</td>
+          </tr>
+          <tr>
+            <td>Silver and gold, ported out of the notebooks</td>
+            <td><span class="status done">Done</span></td>
+            <td>4 dbt models, 20 dbt tests, all passing.</td>
+          </tr>
+          <tr>
+            <td>Test suite</td>
+            <td><span class="status done">Done</span></td>
+            <td>65 Python tests + 20 dbt tests. Runs in ~2 minutes on fixtures.</td>
+          </tr>
+          <tr>
+            <td>Orchestration — Airflow 3 + Cosmos</td>
+            <td><span class="status done">Done</span></td>
+            <td>12 tasks, run end to end in 240 s, 12/12 succeeded.</td>
+          </tr>
+          <tr>
+            <td>CI on every change</td>
+            <td><span class="status done">Done</span></td>
+            <td>GitHub Actions, 2 m 18 s, green.</td>
+          </tr>
+          <tr>
+            <td>Documentation — guides in every folder, 3 ADRs</td>
+            <td><span class="status done">Done</span></td>
+            <td>Plus a running notes file so any session can resume cold, and this
+            report, which lives in the repo at <code>docs/lakehouse-report.html</code>
+            and is itself checked by tests.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      All seven planned stages are complete. The work currently sits on one branch with an
+      open pull request.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">09</span>
+      <h2>What is missing, and what comes next</h2>
+    </div>
+
+    <p>
+      Nothing on this list blocks anything. The pipeline runs, is tested, and is scheduled.
+      These are the honest loose ends.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Size</th><th>What it involves</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Merge the open pull request</strong></td>
+            <td><span class="status todo">Admin</span></td>
+            <td>Four commits — the dbt layer, the users layer, orchestration and CI — are on a branch awaiting review. CI is green on it.</td>
+          </tr>
+          <tr>
+            <td><strong>Remove a dead setting</strong></td>
+            <td><span class="status todo">Small</span></td>
+            <td>The <code>root_tag</code> option is threaded through the config and both ingestion modules, and does nothing — the reader ignores it. Left alone deliberately so it gets its own reviewable commit rather than being buried in a large change.</td>
+          </tr>
+          <tr>
+            <td><strong>Two more ADRs</strong></td>
+            <td><span class="status todo">Small</span></td>
+            <td>The reasoning for "Spark only at bronze" and for choosing DuckDB and local-first currently lives only in the project guide, not as standalone decision records.</td>
+          </tr>
+          <tr>
+            <td><strong>Refresh the README</strong></td>
+            <td><span class="status todo">Small</span></td>
+            <td>Updated as things landed, but worth a full read-through now the shape is final.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Deliberately out of scope — not oversights</h3>
+
+    <div class="grid three">
+      <div class="panel">
+        <h3>Databricks</h3>
+        <p style="font-size:.93rem;margin-bottom:0">
+          The commercial cloud platform this was originally prototyped on. Dropped as a
+          requirement because <em>a project that needs cloud credentials is a project
+          nobody can run</em> — including a reviewer. dbt makes it a swap of one adapter,
+          not a rewrite, so it can return when there is a reason to pay for it.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>An AI enrichment layer</h3>
+        <p style="font-size:.93rem;margin-bottom:0">
+          Classifying post topics with a language model is a natural fit, and the existing
+          tags give free ground truth to score against. Deferred because doing it properly
+          means solving repeatability, caching, a cost ceiling and an accuracy evaluation —
+          a project in itself. A version without those would be worse than not building it.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>Containers, streaming, Kubernetes</h3>
+        <p style="font-size:.93rem;margin-bottom:0">
+          The Dockerfile was deleted rather than fixed, because it did not work and nothing
+          would have told you so; it returns only alongside a CI job that builds it.
+          Streaming is out because the source is a static file — streaming it would be
+          theatre.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">10</span>
+      <h2>Running it yourself</h2>
+    </div>
+
+    <p>
+      Four commands, after downloading the archive. No account, no credentials, no
+      services to start.
+    </p>
+
+<pre><code><span class="c"># install, and make the project's code importable</span>
+uv sync --group dbt
+uv pip install -e . --no-deps
+
+<span class="c"># stage 1 — read the XML into bronze tables (Spark)</span>
+python pipelines/bronze_posts.py     <span class="c"># 26,764 rows</span>
+python pipelines/bronze_users.py     <span class="c"># 71,811 rows</span>
+
+<span class="c"># stage 2 — build silver and gold, and test them (dbt)</span>
+dbt build --project-dir dbt --profiles-dir dbt
+
+<span class="c"># checks</span>
+pytest                               <span class="c"># 65 tests, ~2 min</span>
+ruff check .                         <span class="c"># lint</span>
+</code></pre>
+
+    <p>
+      To run the whole thing as one scheduled job instead, install the extra orchestration
+      dependencies and trigger the DAG:
+    </p>
+
+<pre><code>uv sync --group dbt --group orchestration
+airflow dags test lakehouse          <span class="c"># 12 tasks, ~4 min</span>
+</code></pre>
+
+    <p>
+      And to reproduce exactly what CI does — which needs no data download at all, because
+      it runs on the committed fixtures:
+    </p>
+
+<pre><code>DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_posts.py
+DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_users.py
+dbt build --project-dir dbt --profiles-dir dbt --vars "{...fixture paths...}"
+</code></pre>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <span class="n">11</span>
+      <h2>The idea underneath all of it</h2>
+    </div>
+
+    <p>
+      If there is one thread running through this project, it is a suspicion of things that
+      look fine.
+    </p>
+
+    <p>
+      Every bug described in this report shared a shape: <strong>nothing failed</strong>.
+      Timestamps were wrong but present. The join lost a column but returned the right
+      number of rows. The scheduled run went entirely green and wrote nothing. Config files
+      described a data source that had never existed. In each case the system reported
+      success, and a person had to notice.
+    </p>
+
+    <p>
+      So the defences are built around that: row-count baselines that a refactor cannot
+      quietly change; tests that pin properties the current data does not even exercise;
+      a rule that any file nothing checks gets deleted rather than kept "for later"; written
+      decision records so the reasoning outlives the memory of it; and CI running the real
+      pipeline on a clean machine that shares none of the author's assumptions.
+    </p>
+
+    <p style="max-width:64ch">
+      None of that is exotic. It is just the recognition that in data work, the failure that
+      costs you is rarely the one that crashes.
+    </p>
+  </section>
+
+  <footer>
+    <p>
+      Report generated 19 August 2026 from the state of branch
+      <span class="mono">refactor/local-first-lakehouse</span>. All figures — row counts,
+      test counts, run durations — are measured values from actual runs, not estimates.
+    </p>
+    <p style="margin-bottom:0">
+      Source data: the Stack Exchange data dump for ai.stackexchange.com, CC&nbsp;BY-SA.
+      Not redistributed with the project.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

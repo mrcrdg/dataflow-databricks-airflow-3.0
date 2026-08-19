@@ -44,6 +44,11 @@ every push — including the dbt models, built from the committed fixtures.
 Scope decisions, including what was deliberately left out and why, are in
 [ROADMAP.md](ROADMAP.md).
 
+**New here?** [`docs/lakehouse-report.html`](docs/lakehouse-report.html) explains
+the whole project from first principles — what it is, how the data moves, what
+works and what is left — with every piece of jargon defined. Open it in a
+browser; it is a single self-contained file with no build step.
+
 ## Quickstart
 
 ```bash
@@ -88,7 +93,7 @@ dbt/                silver + gold models, seeds and tests
 tests/              test suite + 5-row fixtures cut from the real dump
 notebooks/          frozen Databricks prototypes — not production code
 orchestration/      the Airflow 3 + Cosmos DAG
-docs/adr/           architecture decision records
+docs/               the project report, plus architecture decision records
 ```
 
 Each directory has an `AGENTS.md` explaining what it is for and the rule that
