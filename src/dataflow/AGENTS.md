@@ -8,8 +8,6 @@ triggered — that is `pipelines/` and `orchestration/`.
 
 ```
 bronze/     raw ingestion — XML in, typed Delta tables out
-silver/     cleaned, validated, standardised   (moving to dbt)
-gold/       business aggregations and marts    (moving to dbt)
 common/     shared infrastructure
 ```
 
@@ -46,8 +44,13 @@ Modules deleted on purpose, do not resurrect them:
 - `state.py` — hand-rolled watermark tracking. dbt incremental models do this
   natively and better.
 
-## silver/ and gold/
+## Why there is no silver/ or gold/
 
-Currently empty. The logic exists in `notebooks/silver_posts.ipynb`,
-`notebooks/gold_*.ipynb` and is being ported to dbt, not to Python. These
-packages will likely be removed once that port completes.
+There were empty `silver/` and `gold/` packages here. They are **deleted** — the
+port went to dbt, not to Python, so nothing was ever going to fill them. Silver
+and gold live in `dbt/models/`.
+
+This is the only layer where Python earns its place: parsing XML is the one job
+dbt cannot do. Once the data is a table, the work is SQL. See `AGENTS.md` at the
+repo root for the full reasoning, and `docs/adr/0002` for why an artifact that
+nothing exercises gets deleted rather than kept "for later".
