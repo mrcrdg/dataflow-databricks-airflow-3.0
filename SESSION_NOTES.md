@@ -5,7 +5,7 @@ chat history. Update this at the end of a working session. For *why* decisions
 were made, see `docs/adr/`; for scope, see `ROADMAP.md`; for a full explanation
 aimed at someone reading the project cold, open `docs/lakehouse-report.html`.
 
-_Last updated: 2026-08-19_
+_Last updated: 2026-08-19 (second session that day)_
 
 ## Where things are
 
@@ -26,7 +26,7 @@ checked by CI.**
 | Orchestration | `lakehouse` DAG, Airflow 3.2 + Cosmos 1.15.1, 12 tasks, verified 12/12 in 240s |
 | CI | `.github/workflows/ci.yml` — ruff, pytest, then the whole dbt project built from fixtures. 2m18s, green |
 | Tests | 65 pytest + 20 dbt, all green. `ruff` clean |
-| Docs | `AGENTS.md` per directory, ADRs 0001–0003, `docs/lakehouse-report.html` |
+| Docs | `AGENTS.md` per directory, ADRs 0001–0005, `docs/lakehouse-report.html` |
 
 ### Git / GitHub state
 
@@ -39,41 +39,41 @@ checked by CI.**
 
 ## What's left
 
-Nothing blocking. Everything below is polish, in priority order.
+**Nothing planned is outstanding.** The four polish items this file used to list
+were done on branch `chore/post-merge-polish`:
 
-### 1. Delete the `root_tag` config knob
+| Item | Outcome |
+|---|---|
+| Delete the `root_tag` knob | Gone from both config files, both bronze modules and both entrypoints. A comment at each read site records why the option is absent, so it does not get helpfully re-added. |
+| The `pipeline.yaml` pointer to nothing | Replaced: bronze is a full refresh because the source is a static archive, and nothing downstream is incremental. |
+| Two more ADRs | `0004-spark-only-at-bronze`, `0005-duckdb-local-first`. Both were prose in `AGENTS.md`; now they are records, cited by the report and the README. |
+| README read-through | Fixed a stale test count (said 57, is 65 — 8 skip without the Airflow extras), corrected the claim that `dbt build` needs the full dump when it can run on the fixtures, and linked the two new ADRs. |
 
-It is threaded through `configs/pipeline.yaml`, both bronze modules and both
-entrypoints, and **it does nothing**: on read, Spark's XML reader ignores
-`rootTag` entirely — only `rowTag` selects rows. Pinned by
-`tests/bronze/test_users.py::test_a_wrong_row_tag_yields_no_rows_rather_than_an_error`.
+Also removed a stale git worktree at `.claude/worktrees/claude-code-otel-observability`,
+left over from an unrelated experiment. It was clean and sat on a commit already
+in `main`, so nothing was lost; the branch `worktree-claude-code-otel-observability`
+still exists.
 
-Touch points: `configs/pipeline.yaml`, `configs/pipeline.ci.yaml`,
-`src/dataflow/bronze/posts.py`, `src/dataflow/bronze/users.py`,
-`pipelines/bronze_posts.py`, `pipelines/bronze_users.py`, plus the tests that
-reference it. Its own commit — do not bury it in something larger.
+### Decisions, and what was rejected
 
-### 2. Fix a pointer to nothing
+- **Kept the branch `refactor/local-first-lakehouse`** rather than deleting it
+  now that it is merged. Rejected deleting: it costs nothing and it is the only
+  record of the pre-merge shape outside the reflog.
+- **Removed the worktree but kept its branch.** Rejected removing both: the
+  directory is what nothing exercises; the branch pointer is free.
+- **Adding the fixture-based `dbt build` to the README** rather than only to
+  `SESSION_NOTES.md`. Rejected leaving it out: the README said the real dump was
+  required, which is not true, and that is the exact drift ADR 0002 is about.
 
-`configs/pipeline.yaml` says *"Incremental loading belongs downstream, in dbt
-incremental models. See ROADMAP.md."* — but `ROADMAP.md` never mentions
-incremental loading, and no incremental model exists. Drop the cross-reference
-and state plainly that bronze is a full refresh and nothing downstream is
-incremental yet. Fold into (1).
+### Honest loose ends, none of them blocking
 
-### 3. Two more ADRs
+These are gaps by choice, now listed in the report's section 09 rather than
+being tracked as work:
 
-Both reasonings live in `AGENTS.md` prose but not as decision records, which is
-where a reader looks for *why*:
-
-- **Spark only at bronze** — parsing XML is the one job dbt cannot do; once the
-  data is a table the work is SQL.
-- **DuckDB, local-first** — a project needing cloud credentials is a project
-  nobody can run; dbt makes Databricks an adapter swap, not a rewrite.
-
-### 4. README read-through
-
-Edited incrementally many times and never read start to finish since.
+- No cloud demonstration — the price of running everywhere for free (ADR 0005).
+- The Spark→dbt seam is verified only by CI actually running both.
+- Nothing is incremental; every run rebuilds every layer.
+- The README is checked by human attention only, unlike the report.
 
 ## Deliberately shelved (see ROADMAP.md for the reasoning)
 
@@ -120,7 +120,9 @@ Each of these fails **silently** — right row counts, no exception, wrong data.
 
 1. **Spark's XML reader ignores `rootTag` on read.** Only `rowTag` selects rows,
    and a wrong `rowTag` returns an empty DataFrame rather than raising: the job
-   writes zero rows and reports success.
+   writes zero rows and reports success. The `rootTag` option is no longer set
+   anywhere — that is deliberate, not an omission; a comment at each read site
+   says so.
 2. **`collect()` converts timestamps to the host's local timezone**, even though
    the session timezone is pinned to UTC (ADR 0001). Assert on timestamps by
    formatting *inside Spark* (`date_format`), never on a Python `datetime` from

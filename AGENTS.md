@@ -27,13 +27,14 @@ Parsing XML is the one job dbt cannot do — dbt only transforms tables that
 already exist. So Spark earns its place at bronze and nowhere else. Once data is
 a table, the work is SQL, and dbt gives tests, lineage, docs and incremental
 logic for free. Re-implementing those in PySpark would be rebuilding dbt badly.
+See `docs/adr/0004`.
 
 ## Runtime target
 
 **DuckDB, locally.** The project must be runnable by anyone who clones it — no
 cloud credentials, no paid account. Databricks was the original prototype
 environment (see `notebooks/`) and remains the documented production target, but
-is deliberately out of scope. See `ROADMAP.md`.
+is deliberately out of scope. See `docs/adr/0005` and `ROADMAP.md`.
 
 ## Conventions
 
