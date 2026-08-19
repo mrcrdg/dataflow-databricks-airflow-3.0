@@ -43,6 +43,9 @@ is deliberately out of scope. See `ROADMAP.md`.
   that is a bug to fix, not a feature.
 - Sessions come from `dataflow.common.spark.get_spark()`. Never call
   `SparkSession.builder` directly outside that module.
+- **Paths from config go through `resolve_path()`.** They are written relative
+  to the repo root; resolving them against the current directory would work from
+  the CLI and break under Airflow, which runs from elsewhere.
 - Logging via `dataflow.common.logging.get_logger()`, `%s` placeholders, no
   f-strings in log calls.
 
@@ -89,6 +92,9 @@ python pipelines/bronze_users.py     # bronze: Users.xml -> Delta
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + dbt tests
 pytest                               # run tests
 ruff check .                         # lint
+
+# the same pipeline as one orchestrated DAG (needs --group orchestration)
+airflow dags test lakehouse          # see orchestration/AGENTS.md for setup
 ```
 
 ## Known baselines

@@ -24,9 +24,17 @@ anyone who clones it.
   - `stg_users` (silver view) — cleaned, typed, blank strings collapsed to NULL
   - `marts_top_tags` (gold table) — top-N tags, default 100
   - `marts_posts_users` (gold table) — one row per post + its author, 26,764 rows
-- **Tests** — 40 pytest tests + 20 dbt tests, all green. `ruff` clean.
+- **Orchestration** — `orchestration/airflow_dags/lakehouse.py` on Airflow 3.2 +
+  Cosmos 1.15. Two parallel bronze tasks, then every dbt model as its own task
+  (12 tasks total). Verified with `airflow dags test lakehouse`: 12/12 succeeded,
+  240s, row counts unchanged.
+- **Tests** — 52 pytest tests + 20 dbt tests, all green. `ruff` clean.
 - **Docs** — `AGENTS.md` in every directory, `ROADMAP.md`, `README.md`, and
-  `docs/adr/0001` (UTC timezone) + `0002` (delete unexercised artifacts).
+  `docs/adr/0001` (UTC timezone), `0002` (delete unexercised artifacts),
+  `0003` (resolve config paths against the project root).
+- **Orchestration (2026-08-19)** — the `lakehouse` DAG, plus the path-resolution
+  fix it needed (`resolve_path()`, ADR 0003). The old broken
+  `bronze_posts_pipeline.py` is deleted.
 - **Users layer (2026-08-19)** — bronze users, `stg_users` and
   `marts_posts_users`, with both notebook defects fixed during the port
   (`owner_user_id` kept alongside `user_id`; `unique` test on
@@ -43,35 +51,25 @@ anyone who clones it.
 - Branch: **`refactor/local-first-lakehouse`**.
 - **PR #1 is MERGED into `main`** — everything *through the review fixes*
   (`fa6c4c8`).
-- The **dbt increment (`6d69061`)** landed after PR #1 merged, so it needs a
-  second PR from the same branch. That PR is open (see GitHub) and also carries
-  the housekeeping commit below.
+- **PR #3 is open** from this branch: the dbt layer, housekeeping, the users
+  layer and orchestration. It is everything since PR #1.
 - Local `main` lags `origin/main`; `git fetch && git checkout main && git pull`
   before branching from it.
 
 ## What's left
 
-In priority order. Only the first is "core"; the rest is polish.
+All five in-scope stages in `ROADMAP.md` are done. What remains is polish, in
+rough priority order.
 
-### 1. Airflow 3 + Cosmos orchestration  (the finale — next up)
-
-Install group already exists: `uv sync --group orchestration` (Airflow 3.2.0).
-
-- Fix `orchestration/airflow_dags/bronze_posts_pipeline.py` — it uses
-  `schedule_interval` (removed in Airflow 3.0 → `schedule`), builds its own
-  Spark session without Delta, and imports `src.dataflow` (should be `dataflow`).
-- DAG shape: two bronze PythonOperators (`pipelines.bronze_posts.main`,
-  `pipelines.bronze_users.main`) → dbt models rendered per-model by Cosmos.
-  The two bronze tasks are independent and can run in parallel; every dbt model
-  depends on both only through the source it reads, so let Cosmos work that out
-  rather than forcing a linear chain.
-
-### 2. Polish
-
-- **CI** (GitHub Actions): run `pytest` + `dbt build` on a fixture on every push.
+- **CI** (GitHub Actions): run `pytest` + `ruff` on every push. Note `dbt build`
+  needs the real 191MB dump, so CI can only run the pytest suite and the DAG
+  integrity tests unless a small Delta fixture is committed — decide which.
 - **More ADRs**: Spark-for-bronze-only, why DuckDB/local-first. (The Spark/dbt
   boundary reasoning is currently only in `AGENTS.md`.)
-- **README**: refreshed for the users layer; refresh again once Airflow lands.
+- **`root_tag` is a dead config knob.** Spark's XML reader ignores `rootTag` on
+  read — only `rowTag` selects rows. It is threaded through `pipeline.yaml`,
+  both bronze modules and both entrypoints, and does nothing. Removing it
+  touches merged code, so it was left alone; worth doing in its own commit.
 
 ## Deliberately shelved (see ROADMAP.md)
 
@@ -87,6 +85,13 @@ uv pip install -e . --no-deps                    # make `dataflow` importable
 python pipelines/bronze_posts.py                 # bronze: Posts.xml -> Delta (26,764 rows)
 python pipelines/bronze_users.py                 # bronze: Users.xml -> Delta (71,811 rows)
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + 20 dbt tests
-pytest                                           # 40 tests, ~2min
+pytest                                           # 52 tests, ~2min
 ruff check .                                     # lint
+```
+
+Or the whole pipeline as one DAG — setup in `orchestration/AGENTS.md`:
+
+```bash
+uv sync --group dbt --group orchestration
+airflow dags test lakehouse                      # 12 tasks, ~4min
 ```

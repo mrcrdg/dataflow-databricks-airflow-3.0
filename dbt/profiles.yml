@@ -14,7 +14,12 @@ dataflow:
       type: duckdb
       # The analytics database. Bronze stays in Delta (spark-warehouse/);
       # silver and gold live here.
-      path: "dataflow.duckdb"
+      #
+      # Relative by default, so `dbt build` from the repo root works with no
+      # setup. Overridable by env var because Cosmos runs dbt from a temporary
+      # directory, where a relative path would create a throwaway database and
+      # silently drop every table on task exit.
+      path: "{{ env_var('DATAFLOW_DUCKDB_PATH', 'dataflow.duckdb') }}"
       # DuckDB reads the bronze Delta table via this extension.
       extensions:
         - delta

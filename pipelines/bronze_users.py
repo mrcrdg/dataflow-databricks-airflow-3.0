@@ -10,7 +10,7 @@ be invoked from the CLI, from Airflow, or from a Databricks job.
 from __future__ import annotations
 
 from dataflow.bronze import users
-from dataflow.common.config import job_config, spark_config
+from dataflow.common.config import job_config, resolve_path, spark_config
 from dataflow.common.logging import get_logger
 from dataflow.common.spark import get_spark
 
@@ -22,9 +22,12 @@ def main() -> int:
     cfg = job_config("bronze", "users")
     spark_cfg = spark_config()
 
+    # Resolved against the project root, not the current directory: this same
+    # main() is called from the CLI and from an Airflow task, and Airflow does
+    # not run from the repo root.
     spark = get_spark(
         app_name=spark_cfg.get("app_name", "dataflow"),
-        warehouse_dir=spark_cfg.get("warehouse_dir", "./spark-warehouse"),
+        warehouse_dir=resolve_path(spark_cfg.get("warehouse_dir", "./spark-warehouse")),
     )
 
     database = cfg["table"].split(".")[0]
@@ -32,7 +35,7 @@ def main() -> int:
 
     row_count = users.run(
         spark,
-        source_path=cfg["source_path"],
+        source_path=resolve_path(cfg["source_path"]),
         table=cfg["table"],
         root_tag=cfg.get("root_tag", "users"),
         row_tag=cfg.get("row_tag", "row"),

@@ -19,6 +19,10 @@ dev = [
 # locally, so it stays out of the default install.
 orchestration = [
     "apache-airflow==3.2.0",
+    # Cosmos renders each dbt model as its own Airflow task rather than hiding
+    # the project behind one `dbt run`. Pinned: it reaches into dbt internals,
+    # so a minor bump can change how the DAG is built.
+    "astronomer-cosmos==1.15.1",
 ]
 # dbt transforms bronze into silver and gold. dbt-duckdb reads the Delta table
 # the Spark bronze job writes, via DuckDB's delta extension.

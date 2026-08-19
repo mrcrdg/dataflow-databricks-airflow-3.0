@@ -34,9 +34,9 @@ That boundary is the whole architecture. Everything else follows from it.
 | Bronze — XML → Delta | **working** — 26,764 posts, 71,811 users, tested |
 | Silver — `stg_posts`, `stg_users` | **working** — dbt views over the Delta tables |
 | Gold — `marts_top_tags`, `marts_posts_users` | **working** — dbt tables |
-| Orchestration — Airflow 3 + Cosmos | not started |
+| Orchestration — Airflow 3 + Cosmos | **working** — 12 tasks, verified end to end |
 
-40 pytest tests and 20 dbt tests, all green.
+52 pytest tests and 20 dbt tests, all green.
 
 Scope decisions, including what was deliberately left out and why, are in
 [ROADMAP.md](ROADMAP.md).
@@ -59,6 +59,16 @@ pytest                              # tests, ~2min
 ruff check .                        # lint
 ```
 
+To run the whole thing as one orchestrated DAG instead:
+
+```bash
+uv sync --group dbt --group orchestration
+export AIRFLOW_HOME=~/airflow-dataflow
+export AIRFLOW__CORE__DAGS_FOLDER=$PWD/orchestration/airflow_dags
+airflow db migrate && airflow dags reserialize
+airflow dags test lakehouse         # bronze x2, then every dbt model as a task
+```
+
 The pytest suite runs against small fixtures cut from the real dump, so it works
 without downloading the 191MB archive. `dbt build` needs the bronze tables, so
 it needs the real thing.
@@ -74,7 +84,7 @@ configs/            pipeline.yaml, the only place paths and tables are declared
 dbt/                silver + gold models, seeds and tests
 tests/              test suite + 5-row fixtures cut from the real dump
 notebooks/          frozen Databricks prototypes — not production code
-orchestration/      Airflow DAGs (not yet working)
+orchestration/      the Airflow 3 + Cosmos DAG
 docs/adr/           architecture decision records
 ```
 
