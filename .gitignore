@@ -33,3 +33,7 @@ comprehension.txt
 
 # dbt local state
 dbt/.user.yml
+
+# Generated dashboards. The script regenerates them; committing one would
+# be an artifact nothing regenerates (ADR 0002).
+viz/out/

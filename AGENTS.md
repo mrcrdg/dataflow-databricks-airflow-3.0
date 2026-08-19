@@ -95,6 +95,7 @@ uv pip install -e . --no-deps        # make `dataflow` importable
 python pipelines/bronze_posts.py     # bronze: Posts.xml -> Delta
 python pipelines/bronze_users.py     # bronze: Users.xml -> Delta
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + dbt tests
+python viz/build_dashboard.py        # charts from the gold tables -> viz/out/
 pytest                               # run tests
 ruff check .                         # lint
 
