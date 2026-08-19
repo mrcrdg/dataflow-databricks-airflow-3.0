@@ -5,7 +5,7 @@ chat history. Update this at the end of a working session. For *why* decisions
 were made, see `docs/adr/`; for scope, see `ROADMAP.md`; for a full explanation
 aimed at someone reading the project cold, open `docs/lakehouse-report.html`.
 
-_Last updated: 2026-08-19 (third session that day)_
+_Last updated: 2026-08-19 (third session that day, closed out)_
 
 ## Where things are
 
@@ -44,6 +44,18 @@ checked by CI.**
 Nothing is blocking. `ROADMAP.md` now carries the five candidates for next work
 with their real costs; the two that have been started are below.
 
+### Start here next session
+
+**Databricks option A**, if the user agrees to it: upload the two bronze Parquet
+exports, create `workspace.bronze.posts` and `workspace.bronze.users`, run
+`dbt build --target databricks`, then check the row counts up there against the
+baselines. The connection is already verified — `dbt debug --target databricks`
+passed on 2026-08-19 against a running 2X-Small serverless warehouse. The
+credentials file exists and is filled in.
+
+The user has two unrelated catalogs in that workspace (`standard_lakehouse`,
+`data-plataform-jayzern`). Everything this project creates goes in `workspace`.
+
 ### Databricks — half done (PR #6)
 
 The models no longer contain DuckDB-only SQL, and `dbt/profiles.yml` has a
@@ -81,6 +93,53 @@ That is an argument for a warehouse, not against dashboards.
 - No cloud demonstration yet (ADR 0005).
 - Nothing is incremental; every run rebuilds every layer.
 - The README is checked by human attention only, unlike the report.
+
+## Decisions, and the alternatives that were rejected
+
+Kept because the reasoning is the part that gets lost. Newest first.
+
+### Databricks
+
+| Decision | Rejected alternative | Why |
+|---|---|---|
+| Dialect differences go through dispatch macros (`dbt/macros/portable_sql.sql`) | Inline `{% if target.type == 'databricks' %}` branches in each model | The branch would sit in the middle of the SQL a reader is trying to follow. Dispatch keeps the model readable and puts every dialect difference in one file |
+| Same, rather than a second dbt project for Databricks | A parallel `dbt-databricks/` project | Two projects means two places to fix a business rule, and they drift. That is the `common/io.py` mistake with more files |
+| Double quotes dropped from bronze column names | A quoting macro per adapter | Unquoted identifiers match case-insensitively on **both** engines, so the macro would exist to produce the same string twice |
+| Sources left exactly as they were | A per-target sources file | `external_location` sits under `meta:`, which dbt-duckdb reads and other adapters ignore. It already worked; touching it would have been change for its own sake |
+| Every `env_var()` in `profiles.yml` carries a default | Bare `env_var('DATABRICKS_HOST')` | dbt renders the whole profiles file on every invocation whatever target is selected, so a bare env_var breaks `dbt build` on a laptop that has never heard of Databricks |
+| `dbt-databricks` pinned exactly (`==1.12.4`) | A range (`>=1.12`) | The adapter tracks dbt-core closely and generates SQL; a minor bump can change output. Same reasoning as the Cosmos pin |
+| `uv.lock` committed including a `pydantic-core` 2.46.4 -> 2.41.5 downgrade | Leaving the lock untouched | `uv sync` re-locks anyway when pyproject changes, so the downgrade would have happened unrecorded. Committing it made CI the check — and CI passed |
+| Credentials live in `~/.dataflow-databricks.env`, mode 600 | A `.env` inside the repo | One `git add -A` away from a published token. Outside the repo it cannot be committed by accident, which is worth more than the convenience |
+| Upload bronze as Parquet (option A) is the recommended next step | Moving the XML ingestion to Databricks first (option B) | A is half an hour and tests the claim that matters — the dbt project runs on another warehouse. B is a day, spends compute quota, and nothing depends on doing it first. **Not yet chosen by the user** |
+
+### Visualisation
+
+| Decision | Rejected alternative | Why |
+|---|---|---|
+| A script that generates a static page | Metabase or Superset | DuckDB allows one writer at a time, so a BI server holding the file open blocks `dbt build`. This is an argument for a warehouse, not against dashboards — the tool belongs on Databricks |
+| Same | Evidence | A better fit than Metabase and still on the table (see `ROADMAP.md`), but it is a build step and a framework for a page that is currently one page |
+| The script is committed, `viz/out/` is not | Committing the generated page so it renders on GitHub | A committed page is an artifact nothing regenerates (ADR 0002). Offered to the user; the offer stands |
+| Hand-authored SVG | A chart library | The page has no runtime dependency at all, which is what lets it open from a filesystem years from now |
+| Palette run through a contrast/CVD validator | Picking colours that looked fine | The two series clear ΔE 18.9. Eyeballing is exactly how a chart ends up unreadable for one reader in twelve |
+| The ordinal ramp reverses direction in dark mode | Keeping light->dark in both themes | On the dark ground the largest band was the one that disappeared |
+| `tests/viz/` asserts structure, not numbers | Asserting the real row counts | The numbers depend on which database is passed in. Structure is what the generator is responsible for |
+| An empty gold table raises | Rendering a page of zeroes | The house failure mode: succeeds, looks plausible, means nothing |
+
+### Process
+
+| Decision | Rejected alternative | Why |
+|---|---|---|
+| One PR per concern (#5 roadmap, #6 Databricks, #7 dashboard, #8 notes) | One "polish" PR | Each is separately reviewable and separately revertable. #6 in particular changes SQL and deserved its own diff |
+| `feat/databricks-target` rebased onto `main` | Stacking it on the roadmap branch it was cut from | Stacked PRs make the second diff unreadable until the first merges |
+| Merged branches kept on the remote | Deleting them | They cost nothing and they are the only record of the pre-merge shape outside the reflog. Same call as `refactor/local-first-lakehouse` |
+| Free Edition facts checked against the docs | Answering from memory | Community Edition was retired on 1 January 2026 and replaced by Free Edition. Getting that wrong would have sent the user to a product that no longer exists |
+
+## Environment note
+
+`uv sync --group dbt --group databricks` was run in this session, so `.venv` now
+has the Databricks adapter. **Airflow is not installed** here — it was not before
+either, which is why 8 orchestration tests skip locally and run only in CI. To
+get them back: `uv sync --group dbt --group orchestration`.
 
 ## Deliberately shelved (see ROADMAP.md for the reasoning)
 
