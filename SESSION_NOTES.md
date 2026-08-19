@@ -5,7 +5,7 @@ chat history. Update this at the end of a working session. For *why* decisions
 were made, see `docs/adr/`; for scope, see `ROADMAP.md`; for a full explanation
 aimed at someone reading the project cold, open `docs/lakehouse-report.html`.
 
-_Last updated: 2026-08-19 (second session that day)_
+_Last updated: 2026-08-19 (third session that day)_
 
 ## Where things are
 
@@ -25,8 +25,10 @@ checked by CI.**
 | `marts_posts_users` | gold table, one row per post + author — 26,764 rows |
 | Orchestration | `lakehouse` DAG, Airflow 3.2 + Cosmos 1.15.1, 12 tasks, verified 12/12 in 240s |
 | CI | `.github/workflows/ci.yml` — ruff, pytest, then the whole dbt project built from fixtures. 2m18s, green |
-| Tests | 65 pytest + 20 dbt, all green. `ruff` clean |
-| Docs | `AGENTS.md` per directory, ADRs 0001–0005, `docs/lakehouse-report.html` |
+| Tests | 72 pytest + 20 dbt, all green. `ruff` clean (8 pytest skip without the Airflow extras) |
+| Docs | `AGENTS.md` per directory, ADRs 0001–0005, `docs/lakehouse-report.html`, `docs/databricks.md` |
+| Dashboard | `python viz/build_dashboard.py` — charts from the gold tables, output gitignored |
+| Databricks | models are dialect-portable and the target exists; **never run against a workspace** |
 
 ### Git / GitHub state
 
@@ -39,39 +41,44 @@ checked by CI.**
 
 ## What's left
 
-**Nothing planned is outstanding.** The four polish items this file used to list
-were done on branch `chore/post-merge-polish`:
+Nothing is blocking. `ROADMAP.md` now carries the five candidates for next work
+with their real costs; the two that have been started are below.
 
-| Item | Outcome |
-|---|---|
-| Delete the `root_tag` knob | Gone from both config files, both bronze modules and both entrypoints. A comment at each read site records why the option is absent, so it does not get helpfully re-added. |
-| The `pipeline.yaml` pointer to nothing | Replaced: bronze is a full refresh because the source is a static archive, and nothing downstream is incremental. |
-| Two more ADRs | `0004-spark-only-at-bronze`, `0005-duckdb-local-first`. Both were prose in `AGENTS.md`; now they are records, cited by the report and the README. |
-| README read-through | Fixed a stale test count (said 57, is 65 — 8 skip without the Airflow extras), corrected the claim that `dbt build` needs the full dump when it can run on the fixtures, and linked the two new ADRs. |
+### Databricks — half done (PR #6)
 
-Also removed a stale git worktree at `.claude/worktrees/claude-code-otel-observability`,
-left over from an unrelated experiment. It was clean and sat on a commit already
-in `main`, so nothing was lost; the branch `worktree-claude-code-otel-observability`
-still exists.
+The models no longer contain DuckDB-only SQL, and `dbt/profiles.yml` has a
+`databricks` target reading every credential from the environment. **It has
+never been run against a real workspace**, so treat it as untested code, not a
+working feature.
 
-### Decisions, and what was rejected
+What is left: an account (Free Edition), bronze tables in the workspace, then
+`dbt build --target databricks`. Steps and credentials in `docs/databricks.md`.
 
-- **Kept the branch `refactor/local-first-lakehouse`** rather than deleting it
-  now that it is merged. Rejected deleting: it costs nothing and it is the only
-  record of the pre-merge shape outside the reflog.
-- **Removed the worktree but kept its branch.** Rejected removing both: the
-  directory is what nothing exercises; the branch pointer is free.
-- **Adding the fixture-based `dbt build` to the README** rather than only to
-  `SESSION_NOTES.md`. Rejected leaving it out: the README said the real dump was
-  required, which is not true, and that is the exact drift ADR 0002 is about.
+The finding worth remembering: ADR 0005's "adapter swap, not a rewrite" was an
+assumption. Three functions differed, and the models quoted bronze columns as
+`p."Id"` — which **Databricks reads as a string literal**, so every one would
+have returned the text `Id` instead of the column. Rows, no error. Fixed in
+`dbt/macros/portable_sql.sql` and by dropping the quotes.
+
+### Visualisation — first cut done (PR #7)
+
+`viz/build_dashboard.py` queries the gold tables and writes a self-contained
+page. `viz/out/` is gitignored — the script regenerates it. `tests/viz/` is what
+exercises it, and it caught two bugs on the first run: a crash on any database
+with an empty score band, and an empty gold table rendering as zeroes rather
+than failing.
+
+Published copy: <https://claude.ai/code/artifact/d522d0db-0984-4c06-9b1e-ffcb0fbd2e21>
+
+A real BI tool (Metabase, Superset) was considered and deferred: DuckDB allows
+one writer at a time, so a BI server holding the file open blocks `dbt build`.
+That is an argument for a warehouse, not against dashboards.
 
 ### Honest loose ends, none of them blocking
 
-These are gaps by choice, now listed in the report's section 09 rather than
-being tracked as work:
-
-- No cloud demonstration — the price of running everywhere for free (ADR 0005).
-- The Spark→dbt seam is verified only by CI actually running both.
+- CI cannot test the Databricks target — that would need a workspace and a token
+  in repo secrets. It is verified by running it, and nothing else.
+- No cloud demonstration yet (ADR 0005).
 - Nothing is incremental; every run rebuilds every layer.
 - The README is checked by human attention only, unlike the report.
 
@@ -93,7 +100,8 @@ uv pip install -e . --no-deps                    # make `dataflow` importable
 python pipelines/bronze_posts.py                 # bronze: Posts.xml -> Delta (26,764 rows)
 python pipelines/bronze_users.py                 # bronze: Users.xml -> Delta (71,811 rows)
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + 20 dbt tests
-pytest                                           # 65 tests, ~2min
+python viz/build_dashboard.py                    # charts -> viz/out/ (gitignored)
+pytest                                           # 72 tests, ~2min
 ruff check .                                     # lint
 ```
 
@@ -137,6 +145,13 @@ Each of these fails **silently** — right row counts, no exception, wrong data.
 5. **`astral-sh/setup-uv` publishes no moving major tag after v7.** `@v10` does
    not resolve; pin the exact version. GitHub's own actions still do publish
    moving majors.
+6. **Databricks SQL reads `"Id"` as the string `Id`**, not as a column. The
+   models used to quote every bronze column that way. It would have returned
+   rows full of constants — no error, right count, wrong data. Unquoted names
+   match case-insensitively on both engines, which is why the quotes are gone.
+7. **A `dbt build` or a dashboard against an empty database succeeds.** Both now
+   refuse: CI asserts row counts after the build, and the dashboard generator
+   raises rather than drawing a page of zeroes.
 
 ## Conventions this project holds to
 
