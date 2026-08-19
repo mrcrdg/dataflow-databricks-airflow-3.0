@@ -29,6 +29,12 @@ orchestration = [
 dbt = [
     "dbt-duckdb>=1.9",
 ]
+# Databricks is the documented production target and is opt-in: nothing in the
+# local pipeline needs it. Pinned exactly — the adapter tracks dbt-core closely,
+# and a minor bump can move the SQL it generates.
+databricks = [
+    "dbt-databricks==1.12.4",
+]
 
 [build-system]
 requires = ["hatchling"]
