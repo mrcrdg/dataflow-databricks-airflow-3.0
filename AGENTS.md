@@ -3,14 +3,19 @@
 Orientation for anyone (human or AI agent) working in this repo. Directory-level
 `AGENTS.md` files add detail; this one covers the whole project.
 
+For an explanation aimed at a human reading the project cold — what it is, why
+it is shaped this way, what is done and what is left — see
+`docs/lakehouse-report.html`.
+
 ## What this project is
 
 A medallion lakehouse over the [ai.stackexchange.com](https://archive.org/details/stackexchange)
 data dump. Raw XML in, analytics tables out.
 
 ```
-Posts.xml ──[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
-                                                     |
+Posts.xml ──┐
+            ├─[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
+Users.xml ──┘                                        |
                                               [Airflow + Cosmos]
 ```
 
@@ -42,6 +47,9 @@ is deliberately out of scope. See `ROADMAP.md`.
   that is a bug to fix, not a feature.
 - Sessions come from `dataflow.common.spark.get_spark()`. Never call
   `SparkSession.builder` directly outside that module.
+- **Paths from config go through `resolve_path()`.** They are written relative
+  to the repo root; resolving them against the current directory would work from
+  the CLI and break under Airflow, which runs from elsewhere.
 - Logging via `dataflow.common.logging.get_logger()`, `%s` placeholders, no
   f-strings in log calls.
 
@@ -81,24 +89,49 @@ to get it back.
 ## Commands
 
 ```bash
-uv sync                              # install dependencies
-pip install -e . --no-deps           # make `dataflow` importable
-python pipelines/bronze_posts.py     # run bronze ingestion
+uv sync --group dbt                  # install dependencies
+uv pip install -e . --no-deps        # make `dataflow` importable
+python pipelines/bronze_posts.py     # bronze: Posts.xml -> Delta
+python pipelines/bronze_users.py     # bronze: Users.xml -> Delta
+dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + dbt tests
 pytest                               # run tests
 ruff check .                         # lint
+
+# the same pipeline as one orchestrated DAG (needs --group orchestration)
+airflow dags test lakehouse          # see orchestration/AGENTS.md for setup
 ```
 
-## Known baseline
+## CI
 
-Bronze ingestion of `Posts.xml` produces **26,764 rows**. Any refactor that
-changes this number has changed behaviour — treat it as a regression test.
+`.github/workflows/ci.yml` runs on every pull request: `ruff`, `pytest`, then
+the **full dbt project** — built against bronze tables that CI ingests from the
+committed XML fixtures using `configs/pipeline.ci.yaml`.
+
+The point is that nothing generated is committed. A pre-built Delta fixture
+would be an artifact nothing regenerates, free to drift away from what
+`bronze/posts.py` actually writes. See `docs/adr/0002`.
+
+Useful side effect: the fixtures reference two user ids the users fixture does
+not contain, so CI exercises the `author_status = 'unresolved'` branch, which
+the real dump never produces.
+
+## Known baselines
+
+Row counts that pin behaviour. Any refactor that changes one of these has
+changed behaviour — treat them as regression tests.
+
+| Table | Rows |
+|---|---|
+| `bronze.posts` | 26,764 |
+| `bronze.users` | 71,811 |
+| `marts_posts_users` | 26,764 — one row per post; a different number means the join fanned out |
 
 ## Scale, stated honestly
 
-The dataset is ~191MB and 26,764 posts. Spark is not required at this size; a
-single-node engine would be faster. It is used because this project is a
-scale-model of a Spark workload and the ingestion patterns are the point. Do not
-pretend the data is big — the honest framing is the defensible one.
+The dataset is ~191MB, 26,764 posts and 71,811 users. Spark is not required at
+this size; a single-node engine would be faster. It is used because this project
+is a scale-model of a Spark workload and the ingestion patterns are the point. Do
+not pretend the data is big — the honest framing is the defensible one.
 
 ## Do not
 

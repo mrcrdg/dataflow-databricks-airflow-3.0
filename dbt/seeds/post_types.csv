@@ -1,0 +1,16 @@
+post_type_id,post_type
+1,Question
+2,Answer
+3,Orphaned tag wiki
+4,Tag wiki excerpt
+5,Tag wiki
+6,Moderator nomination
+7,Wiki placeholder
+8,Privilege wiki
+9,Article
+10,HelpArticle
+12,Collection
+13,ModeratorQuestionnaireResponse
+14,Announcement
+15,CollectiveDiscussion
+17,CollectiveCollection

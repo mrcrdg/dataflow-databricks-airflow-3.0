@@ -57,6 +57,34 @@ def config_path() -> Path:
     )
 
 
+def project_root(path: str | Path | None = None) -> Path:
+    """The directory the config's relative paths are anchored to.
+
+    `configs/pipeline.yaml` lives one level below it, so the root is the config
+    file's grandparent.
+    """
+    resolved = Path(path) if path is not None else config_path()
+    return resolved.resolve().parent.parent
+
+
+def resolve_path(value: str, config: str | Path | None = None) -> str:
+    """Make a config path absolute, anchored at the project root.
+
+    Paths in `pipeline.yaml` are written relative to the repo root, because that
+    is the readable form and the form a reader can check against `ls`. Resolving
+    them against the *current working directory* instead would mean a job only
+    runs when launched from the root — fine from the CLI, broken under Airflow,
+    which sets its own cwd. Anchoring here makes the two agree.
+
+    An absolute path in the config is returned unchanged, which is the escape
+    hatch for a deployment whose data lives outside the repo.
+    """
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return str(candidate)
+    return str(project_root(config) / candidate)
+
+
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Load and parse the pipeline config."""
     resolved = Path(path) if path is not None else config_path()

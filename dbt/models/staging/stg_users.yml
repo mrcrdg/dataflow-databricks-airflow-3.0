@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_users
+    description: >
+      One row per user account, cleaned and typed. The dimension side of
+      marts_posts_users. Includes Id = -1, the Community pseudo-user, which
+      owns community-wiki posts.
+    columns:
+      - name: user_id
+        description: Primary key. Renamed from the source's Id.
+        data_tests:
+          # The load-bearing test. marts_posts_users joins on this key and must
+          # stay at one row per post; a duplicate would silently fan the join
+          # out instead of failing, inflating every count downstream.
+          - unique
+          - not_null
+      - name: display_name
+        description: The user's public name.
+        data_tests:
+          - not_null
+      - name: reputation
+        description: Reputation score at the time of the dump.
+        data_tests:
+          - not_null
+      - name: location
+        description: Free-text location, NULL when absent or blank in the source.
+      - name: website_url
+        description: Profile URL, NULL when absent or blank in the source.

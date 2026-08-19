@@ -1,0 +1,18 @@
+version: 2
+
+seeds:
+  - name: post_types
+    description: >
+      Lookup from PostTypeId to a human label. In the original notebook this
+      was an in-memory DataFrame broadcast-joined onto posts; as a seed the
+      mapping is data under version control, with tests, instead of code.
+
+      Only ids 1, 2, 4, 5, 6, 7 actually occur in this dump. The rest are kept
+      for completeness. Ids 11 and 16 are intentionally absent — their meaning
+      is not documented, so stg_posts maps any unknown id to 'Unknown' rather
+      than inventing a label here.
+    columns:
+      - name: post_type_id
+        data_tests: [unique, not_null]
+      - name: post_type
+        data_tests: [not_null]

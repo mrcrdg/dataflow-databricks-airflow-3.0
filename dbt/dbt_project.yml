@@ -1,0 +1,31 @@
+name: dataflow
+version: "0.1.0"
+profile: dataflow
+
+# Paths are relative to this file.
+model-paths: ["models"]
+seed-paths: ["seeds"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Path to the Delta table the Spark bronze job writes. dbt reads it through
+  # DuckDB's delta_scan(); see models/staging/_bronze__sources.yml.
+  # Relative to where dbt is invoked (the repo root, via `dbt --project-dir dbt`).
+  bronze_posts_path: "spark-warehouse/bronze.db/posts"
+  bronze_users_path: "spark-warehouse/bronze.db/users"
+
+  # marts_top_tags: how many tags to keep. The original notebook's code said 10
+  # while its own docs said 100; making it a var ends the disagreement and lets
+  # the mart be re-pointed without editing SQL.
+  top_tags_limit: 100
+
+models:
+  dataflow:
+    staging:
+      # Staging models are ephemeral views: cheap, always fresh, and they keep
+      # the raw delta_scan() out of every downstream query.
+      +materialized: view
+    marts:
+      # Marts are tables — they are what gets queried, so materialise them once.
+      +materialized: table

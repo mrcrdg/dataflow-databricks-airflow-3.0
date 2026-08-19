@@ -16,3 +16,10 @@ bronze:
     # Bronze is a full refresh of the raw dump. Incremental loading belongs
     # downstream, in dbt incremental models. See ROADMAP.md.
     write_mode: overwrite
+
+  users:
+    source_path: data/ai.stackexchange.com/Users.xml
+    root_tag: users
+    row_tag: row
+    table: bronze.users
+    write_mode: overwrite

@@ -41,6 +41,10 @@ one. If you find yourself adding a second way to run an existing job, stop.
 
 ```bash
 python pipelines/bronze_posts.py
+python pipelines/bronze_users.py
 ```
 
-Requires `pip install -e . --no-deps` so `dataflow` is importable.
+Requires `uv pip install -e . --no-deps` so `dataflow` is importable.
+
+There is no silver or gold entrypoint here, and there should not be: those
+layers are dbt models, run with `dbt build`. One way to run each job.

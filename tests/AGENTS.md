@@ -1,17 +1,21 @@
 # tests
 
 ```bash
-pytest              # full suite, ~60s (most of it is Spark starting up)
-pytest tests/common # fast, no Spark
+pytest                    # full suite, ~2min (most of it is Spark starting up)
+pytest tests/common       # fast, no Spark
+pytest tests/orchestration # DAG integrity, ~20s, needs the orchestration extras
 ```
 
 ## Structure
 
 ```
-conftest.py            session-scoped Spark fixture + fixture paths
-fixtures/              5 real rows from Posts.xml (3.5KB)
-bronze/test_posts.py   ingestion: schema, transforms, Delta round-trip
-common/test_config.py  config loading, no Spark
+conftest.py             session-scoped Spark fixture + fixture paths
+fixtures/               5 real rows each from Posts.xml and Users.xml
+bronze/test_posts.py    ingestion: schema, transforms, Delta round-trip
+bronze/test_users.py    same, plus null-vs-blank and the UTC storage check
+common/test_config.py   config loading and path resolution, no Spark
+orchestration/          DAG parses, Cosmos renders, graph is the intended shape
+docs/                   the project report still describes this repo
 ```
 
 ## Two kinds of test, kept apart
@@ -53,12 +57,32 @@ why they are written down:
 - `test_real_config_is_valid_and_complete` — asserts the committed
   `configs/pipeline.yaml` actually works. This is the test that would have caught
   the old config pointing at a CSV that never existed.
+- `test_resolve_path_does_not_depend_on_the_working_directory` — jobs are
+  launched from the CLI at the repo root *and* from Airflow, which is elsewhere.
+  A cwd-relative path works in the first case and fails in the second, so the
+  CLI would keep passing while the DAG broke.
+- `test_timestamps_are_stored_as_utc` — asserts the stored instant by formatting
+  it *inside Spark*. `collect()` converts to the host's local timezone, so the
+  obvious version of this test passes or fails depending on who runs it — the
+  exact bug ADR 0001 exists to prevent.
+- `test_every_dbt_task_gets_absolute_paths` — Cosmos runs dbt from a temp
+  directory; a relative DuckDB path there produces a run that reports success
+  and writes nothing.
+- `test_ci_config_points_at_fixtures_that_exist` — CI ingests those files and
+  then runs the whole dbt project against the result. A renamed fixture would
+  otherwise surface as a CI failure in a step whose job was to prevent one.
+- `tests/docs/` — the project report is prose, and prose is what has drifted in
+  this repo three times. Its *structural* claims (models, entry points, ADR
+  numbers, row-count baselines) are asserted against the repo. Its measured
+  figures are not: the report is a dated snapshot and says so, and a snapshot
+  that was true when taken is a record rather than drift.
 
-## Known baseline
+## Known baselines
 
-Bronze ingestion of the full dump produces **26,764 rows**. The suite does not
-assert this (it uses the fixture), but any refactor should be checked against it:
+The suite runs on fixtures, so it does not assert these. Any refactor should be
+checked against them — the table is in the root `AGENTS.md`:
 
 ```bash
-python pipelines/bronze_posts.py
+python pipelines/bronze_posts.py    # 26,764 rows
+python pipelines/bronze_users.py    # 71,811 rows
 ```

@@ -1,0 +1,31 @@
+# Pipeline configuration for CI.
+#
+# Identical in shape to pipeline.yaml, pointed at the committed test fixtures
+# instead of the 191MB dump. CI runs the real bronze jobs against these, then
+# runs dbt against the Delta tables they produce — so every model and every dbt
+# test is exercised on every push, without committing a generated Delta table
+# that could drift away from what the ingestion code actually writes.
+#
+# Selected with DATAFLOW_CONFIG=configs/pipeline.ci.yaml.
+#
+# The warehouse is `ci-warehouse/`, not `spark-warehouse/`, so running this
+# locally to reproduce a CI failure cannot clobber real bronze tables.
+
+spark:
+  app_name: dataflow-ci
+  warehouse_dir: ./ci-warehouse
+
+bronze:
+  posts:
+    source_path: tests/fixtures/posts_sample.xml
+    root_tag: posts
+    row_tag: row
+    table: bronze.posts
+    write_mode: overwrite
+
+  users:
+    source_path: tests/fixtures/users_sample.xml
+    root_tag: users
+    row_tag: row
+    table: bronze.users
+    write_mode: overwrite
