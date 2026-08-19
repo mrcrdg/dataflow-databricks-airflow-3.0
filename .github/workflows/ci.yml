@@ -1,0 +1,127 @@
+# CI: lint, tests, and the full dbt DAG on every push.
+#
+# The interesting part is the last two steps. dbt cannot run without bronze
+# tables, and the real bronze tables come from a 191MB dump that is not in the
+# repo. Rather than commit a generated Delta table — which nothing would
+# regenerate, so it would drift away from what the ingestion code actually
+# writes — CI runs the real bronze jobs against the small XML fixtures, then
+# points dbt at the Delta tables they produce.
+#
+# Nothing generated is committed, and every model and dbt test is exercised on
+# every push. See docs/adr/0002 for why an artifact nothing exercises gets
+# deleted.
+
+name: CI
+
+# Branch work happens through pull requests, so `pull_request` covers it.
+# Adding `push: branches: ["**"]` as well would run every branch twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch cancels the first — no point finishing a run
+# for a commit nobody is looking at any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # dbt writes silver and gold here. Not the committed default, so a local
+      # reproduction of a CI failure cannot clobber a real database.
+      DATAFLOW_DUCKDB_PATH: ${{ github.workspace }}/ci.duckdb
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        # Spark needs a JVM. Spark 4.1 supports 17 and 21; pinned rather than
+        # taking the runner default, which changes without notice.
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        # Both optional groups: dbt for the models, orchestration for the DAG
+        # integrity tests. Without the latter, tests/orchestration/ skips
+        # silently and the DAG goes unchecked — which is the whole reason it
+        # has tests.
+        run: |
+          uv sync --group dbt --group orchestration
+          uv pip install -e . --no-deps
+
+      - name: Cache Spark's Delta jars
+        # configure_spark_with_delta_pip resolves the Delta jars from Maven on
+        # first session creation. Without this that download happens on every
+        # run, and it is the single slowest step.
+        uses: actions/cache@v6
+        with:
+          path: ~/.ivy2
+          key: ivy2-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: ivy2-${{ runner.os }}-
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        # Spark starts once for the whole session-scoped suite, so most of the
+        # runtime here is JVM startup, not the tests.
+        run: uv run pytest -q
+
+      - name: Ingest bronze from the test fixtures
+        env:
+          DATAFLOW_CONFIG: configs/pipeline.ci.yaml
+        run: |
+          uv run python pipelines/bronze_posts.py
+          uv run python pipelines/bronze_users.py
+
+      - name: Build and test every dbt model
+        # The bronze paths must be absolute and must point at the CI warehouse,
+        # not the repo-root-relative default in dbt_project.yml.
+        run: |
+          uv run dbt build \
+            --project-dir dbt \
+            --profiles-dir dbt \
+            --vars "{bronze_posts_path: ${{ github.workspace }}/ci-warehouse/bronze.db/posts, bronze_users_path: ${{ github.workspace }}/ci-warehouse/bronze.db/users}"
+
+      - name: Check the fixture pipeline produced what it should
+        # A dbt build against an empty database succeeds and builds nothing.
+        # That is the exact failure ADR 0003 is about, so assert on the output
+        # rather than trusting the exit code.
+        run: |
+          uv run python - <<'PY'
+          import os
+          import duckdb
+
+          expected = {
+              "stg_posts": 5,
+              "stg_users": 5,
+              "marts_posts_users": 5,
+          }
+          con = duckdb.connect(os.environ["DATAFLOW_DUCKDB_PATH"], read_only=True)
+          for table, want in expected.items():
+              got = con.execute(f"select count(*) from {table}").fetchone()[0]
+              assert got == want, f"{table}: expected {want} rows, got {got}"
+
+          # The fixtures reference two user ids that are not in the users
+          # fixture, so CI covers the 'unresolved' author branch — which the
+          # real dump never produces (0 rows there).
+          statuses = dict(
+              con.execute(
+                  "select author_status, count(*) from marts_posts_users group by 1"
+              ).fetchall()
+          )
+          assert statuses == {"resolved": 3, "unresolved": 2}, statuses
+          print("fixture pipeline OK:", statuses)
+          PY

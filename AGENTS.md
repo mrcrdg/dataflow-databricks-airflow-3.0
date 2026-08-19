@@ -97,6 +97,20 @@ ruff check .                         # lint
 airflow dags test lakehouse          # see orchestration/AGENTS.md for setup
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request: `ruff`, `pytest`, then
+the **full dbt project** — built against bronze tables that CI ingests from the
+committed XML fixtures using `configs/pipeline.ci.yaml`.
+
+The point is that nothing generated is committed. A pre-built Delta fixture
+would be an artifact nothing regenerates, free to drift away from what
+`bronze/posts.py` actually writes. See `docs/adr/0002`.
+
+Useful side effect: the fixtures reference two user ids the users fixture does
+not contain, so CI exercises the `author_status = 'unresolved'` branch, which
+the real dump never produces.
+
 ## Known baselines
 
 Row counts that pin behaviour. Any refactor that changes one of these has

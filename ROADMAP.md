@@ -24,7 +24,8 @@ Everything downstream is SQL, so it belongs in dbt.
 | 3 | Tests for the bronze layer | done |
 | 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | done — `stg_posts`, `stg_users`, `marts_top_tags`, `marts_posts_users` |
 | 5 | Airflow 3 + Cosmos orchestration | done — `lakehouse` DAG, 12 tasks, verified end to end |
-| 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | in progress — ADRs 0001–0002 and per-directory `AGENTS.md` done |
+| 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | in progress — ADRs 0001–0003 and per-directory `AGENTS.md` done |
+| 7 | CI: lint, tests and the full dbt DAG on every push | done — builds bronze from the fixtures, no generated artifact committed |
 
 Current state, and what is being worked on next, is tracked in `SESSION_NOTES.md`.
 
@@ -77,6 +78,9 @@ is worse than no container**: it invites someone to trust it.
 When this comes back it should arrive with a CI job that builds the image and
 runs the pipeline inside it. Until something exercises it, it will drift — the
 same way `pipeline.yaml` drifted into describing a CSV that never existed.
+
+CI now exists (`.github/workflows/ci.yml`), so the precondition is met: adding a
+Dockerfile means adding a job that builds it and runs a pipeline inside it.
 
 ### Not planned
 

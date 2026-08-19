@@ -8,6 +8,8 @@ cannot drift silently.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from dataflow.common.config import (
@@ -175,3 +177,50 @@ def test_resolve_path_does_not_depend_on_the_working_directory(config_file, tmp_
     monkeypatch.chdir(elsewhere)
 
     assert resolve_path("data/Posts.xml", config_file) == from_root
+
+
+# ---------------------------------------------------------------------------
+# The CI config — exercised here so it cannot drift from the fixtures
+# ---------------------------------------------------------------------------
+
+CI_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "pipeline.ci.yaml"
+
+
+@pytest.mark.parametrize("job", ["posts", "users"])
+def test_ci_config_points_at_fixtures_that_exist(job):
+    """CI ingests these files, then runs dbt against the result.
+
+    A renamed or moved fixture would fail in CI rather than here, which is a
+    worse place to find out — the whole dbt layer would go unbuilt while the
+    step that was meant to catch it reported a missing file.
+    """
+    cfg = job_config("bronze", job, CI_CONFIG)
+
+    source = Path(resolve_path(cfg["source_path"], CI_CONFIG))
+    assert source.is_file(), f"CI fixture missing: {source}"
+
+
+def test_ci_config_does_not_write_to_the_real_warehouse():
+    """CI uses its own warehouse so a local reproduction cannot clobber bronze.
+
+    Reproducing a CI failure means running these same commands on a developer
+    machine, where `spark-warehouse/` holds the real 26,764-row tables.
+    """
+    warehouse = spark_config(CI_CONFIG)["warehouse_dir"]
+
+    assert "spark-warehouse" not in warehouse
+
+
+@pytest.mark.parametrize("job", ["posts", "users"])
+def test_ci_config_matches_the_real_config_shape(job):
+    """Same keys as the committed pipeline.yaml, so the entrypoints behave.
+
+    The two configs are read by identical code. If CI's gained or lost a key,
+    the job it runs would not be the job that runs in production.
+    """
+    real = job_config("bronze", job)
+    ci = job_config("bronze", job, CI_CONFIG)
+
+    assert real.keys() == ci.keys()
+    assert real["table"] == ci["table"]
+    assert real["row_tag"] == ci["row_tag"]

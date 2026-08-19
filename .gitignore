@@ -7,6 +7,8 @@ __pycache__/
 # Data & build artifacts (source data is downloaded, not committed)
 data/
 spark-warehouse/
+# Bronze tables built from the test fixtures, by CI or by a local repro of it.
+ci-warehouse/
 output/
 *.duckdb
 

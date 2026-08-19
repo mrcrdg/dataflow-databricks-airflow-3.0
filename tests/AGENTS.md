@@ -67,6 +67,9 @@ why they are written down:
 - `test_every_dbt_task_gets_absolute_paths` — Cosmos runs dbt from a temp
   directory; a relative DuckDB path there produces a run that reports success
   and writes nothing.
+- `test_ci_config_points_at_fixtures_that_exist` — CI ingests those files and
+  then runs the whole dbt project against the result. A renamed fixture would
+  otherwise surface as a CI failure in a step whose job was to prevent one.
 
 ## Known baselines
 

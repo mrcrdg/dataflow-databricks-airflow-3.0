@@ -28,10 +28,18 @@ anyone who clones it.
   Cosmos 1.15. Two parallel bronze tasks, then every dbt model as its own task
   (12 tasks total). Verified with `airflow dags test lakehouse`: 12/12 succeeded,
   240s, row counts unchanged.
-- **Tests** — 52 pytest tests + 20 dbt tests, all green. `ruff` clean.
+- **CI** — `.github/workflows/ci.yml`. On every PR: `ruff`, `pytest`, then real
+  bronze ingestion from the committed XML fixtures (`configs/pipeline.ci.yaml`)
+  and a full `dbt build` against the result, followed by an assertion on the row
+  counts. Nothing generated is committed. The fixture join covers the
+  `unresolved` author branch that the real dump never produces.
+- **Tests** — 57 pytest tests + 20 dbt tests, all green. `ruff` clean.
 - **Docs** — `AGENTS.md` in every directory, `ROADMAP.md`, `README.md`, and
   `docs/adr/0001` (UTC timezone), `0002` (delete unexercised artifacts),
   `0003` (resolve config paths against the project root).
+- **CI (2026-08-19)** — GitHub Actions, dry-run locally before pushing: bronze
+  on fixtures produced 5 + 5 rows, `dbt build` passed 25 nodes, and the assertion
+  script returned `{'resolved': 3, 'unresolved': 2}`.
 - **Orchestration (2026-08-19)** — the `lakehouse` DAG, plus the path-resolution
   fix it needed (`resolve_path()`, ADR 0003). The old broken
   `bronze_posts_pipeline.py` is deleted.
@@ -61,9 +69,6 @@ anyone who clones it.
 All five in-scope stages in `ROADMAP.md` are done. What remains is polish, in
 rough priority order.
 
-- **CI** (GitHub Actions): run `pytest` + `ruff` on every push. Note `dbt build`
-  needs the real 191MB dump, so CI can only run the pytest suite and the DAG
-  integrity tests unless a small Delta fixture is committed — decide which.
 - **More ADRs**: Spark-for-bronze-only, why DuckDB/local-first. (The Spark/dbt
   boundary reasoning is currently only in `AGENTS.md`.)
 - **`root_tag` is a dead config knob.** Spark's XML reader ignores `rootTag` on
@@ -85,7 +90,7 @@ uv pip install -e . --no-deps                    # make `dataflow` importable
 python pipelines/bronze_posts.py                 # bronze: Posts.xml -> Delta (26,764 rows)
 python pipelines/bronze_users.py                 # bronze: Users.xml -> Delta (71,811 rows)
 dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + 20 dbt tests
-pytest                                           # 52 tests, ~2min
+pytest                                           # 57 tests, ~2min
 ruff check .                                     # lint
 ```
 
@@ -94,4 +99,14 @@ Or the whole pipeline as one DAG — setup in `orchestration/AGENTS.md`:
 ```bash
 uv sync --group dbt --group orchestration
 airflow dags test lakehouse                      # 12 tasks, ~4min
+```
+
+Or reproduce what CI does, on the fixtures — needs no data download:
+
+```bash
+DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_posts.py
+DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_users.py
+DATAFLOW_DUCKDB_PATH=$PWD/ci.duckdb dbt build --project-dir dbt --profiles-dir dbt \
+  --vars "{bronze_posts_path: $PWD/ci-warehouse/bronze.db/posts, \
+           bronze_users_path: $PWD/ci-warehouse/bronze.db/users}"
 ```

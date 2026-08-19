@@ -1,5 +1,7 @@
 # Medallion Lakehouse — Stack Exchange AI dump
 
+[![CI](https://github.com/mrcrdg/dataflow-databricks-airflow-3.0/actions/workflows/ci.yml/badge.svg)](https://github.com/mrcrdg/dataflow-databricks-airflow-3.0/actions/workflows/ci.yml)
+
 A bronze → silver → gold data pipeline over the
 [ai.stackexchange.com](https://archive.org/details/stackexchange) archive.
 Raw XML in, analytics tables out.
@@ -36,7 +38,8 @@ That boundary is the whole architecture. Everything else follows from it.
 | Gold — `marts_top_tags`, `marts_posts_users` | **working** — dbt tables |
 | Orchestration — Airflow 3 + Cosmos | **working** — 12 tasks, verified end to end |
 
-52 pytest tests and 20 dbt tests, all green.
+57 pytest tests and 20 dbt tests, all green, and CI runs every one of them on
+every push — including the dbt models, built from the committed fixtures.
 
 Scope decisions, including what was deliberately left out and why, are in
 [ROADMAP.md](ROADMAP.md).
