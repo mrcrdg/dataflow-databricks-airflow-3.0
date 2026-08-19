@@ -7,8 +7,9 @@ Raw XML in, analytics tables out.
 **Runs locally. No cloud account, no credentials, no paid services.**
 
 ```
-Posts.xml ──[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
-                                                    |
+Posts.xml ──┐
+            ├─[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
+Users.xml ──┘                                       |
                                              [Airflow + Cosmos]
 ```
 
@@ -30,10 +31,12 @@ That boundary is the whole architecture. Everything else follows from it.
 
 | Layer | State |
 |---|---|
-| Bronze — XML → Delta | **working**, 26,764 rows, tested |
-| Silver — cleaning, tags, post types | logic exists in `notebooks/`, being ported to dbt |
-| Gold — posts×users, top tags | logic exists in `notebooks/`, being ported to dbt |
+| Bronze — XML → Delta | **working** — 26,764 posts, 71,811 users, tested |
+| Silver — `stg_posts`, `stg_users` | **working** — dbt views over the Delta tables |
+| Gold — `marts_top_tags`, `marts_posts_users` | **working** — dbt tables |
 | Orchestration — Airflow 3 + Cosmos | not started |
+
+40 pytest tests and 20 dbt tests, all green.
 
 Scope decisions, including what was deliberately left out and why, are in
 [ROADMAP.md](ROADMAP.md).
@@ -41,7 +44,7 @@ Scope decisions, including what was deliberately left out and why, are in
 ## Quickstart
 
 ```bash
-uv sync                             # install dependencies
+uv sync --group dbt                 # install dependencies
 uv pip install -e . --no-deps       # make `dataflow` importable
 ```
 
@@ -50,22 +53,26 @@ and extract it to `data/ai.stackexchange.com/`, then:
 
 ```bash
 python pipelines/bronze_posts.py    # ingest Posts.xml -> Delta
-pytest                              # tests, ~60s
+python pipelines/bronze_users.py    # ingest Users.xml -> Delta
+dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + dbt tests
+pytest                              # tests, ~2min
 ruff check .                        # lint
 ```
 
-The test suite runs against a 3.5KB fixture, so it works without downloading the
-191MB dump.
+The pytest suite runs against small fixtures cut from the real dump, so it works
+without downloading the 191MB archive. `dbt build` needs the bronze tables, so
+it needs the real thing.
 
 ## Layout
 
 ```
 src/dataflow/       transformation logic — pure functions, no I/O
-  bronze/           XML ingestion
+  bronze/           XML ingestion — posts, users
   common/           Spark factory, config loader, logging
 pipelines/          entrypoints — wiring only, one per job
 configs/            pipeline.yaml, the only place paths and tables are declared
-tests/              test suite + a 5-row fixture from the real dump
+dbt/                silver + gold models, seeds and tests
+tests/              test suite + 5-row fixtures cut from the real dump
 notebooks/          frozen Databricks prototypes — not production code
 orchestration/      Airflow DAGs (not yet working)
 docs/adr/           architecture decision records
@@ -86,8 +93,8 @@ production target. See [ROADMAP.md](ROADMAP.md).
 
 ## On scale, honestly
 
-The dataset is 191MB and 26,764 posts. **Spark is not required at this size** — a
-single-node engine would be faster.
+The dataset is 191MB, 26,764 posts and 71,811 users. **Spark is not required at
+this size** — a single-node engine would be faster.
 
 It is used because this project is a scale-model of a Spark workload, and the
 ingestion patterns are the point: explicit schemas, a session factory, Delta as

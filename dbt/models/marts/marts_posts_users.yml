@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: marts_posts_users
+    description: >
+      One row per post, enriched with its author. The join is a LEFT JOIN, so
+      posts with a deleted or missing author are kept with NULL user fields —
+      author_status says which case applies.
+    columns:
+      - name: post_id
+        description: Primary key. One row per post.
+        data_tests:
+          # Together these are the grain test. If stg_users ever gained a
+          # duplicate user_id the join would fan out and `unique` would catch
+          # it here, even though the cause is upstream.
+          - unique
+          - not_null
+      - name: owner_user_id
+        description: >
+          The author id as recorded on the post, NULL only if the source had
+          none. Populated even when the join found no matching user — that is
+          the difference from the notebook this model replaces.
+      - name: user_id
+        description: >
+          The matched user's id, NULL when the join found no user. Compare with
+          owner_user_id to tell a missing author from an unresolved one.
+      - name: author_status
+        description: >
+          'resolved' (user found), 'unresolved' (post names an author we have no
+          user row for), or 'anonymous' (post names no author). On the current
+          dump: 26,307 resolved, 457 anonymous, 0 unresolved — the users file is
+          complete for this snapshot. The 'unresolved' branch is kept because a
+          partial or newer dump would produce it, and it is better to label that
+          case than to have it read as anonymous.
+        data_tests:
+          - not_null
+          # `arguments:` nesting is required from dbt 1.10; the flat form is
+          # deprecated and warns on every build.
+          - accepted_values:
+              arguments:
+                values: ["resolved", "unresolved", "anonymous"]
+      - name: post_type
+        description: Human label for the post type, carried from stg_posts.
+        data_tests:
+          - not_null

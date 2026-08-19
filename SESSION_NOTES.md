@@ -16,13 +16,22 @@ anyone who clones it.
 
 - **Bronze** — `python pipelines/bronze_posts.py` ingests `Posts.xml` to a Delta
   table. 26,764 rows (the regression baseline). Single entrypoint, config-driven.
-- **Silver + gold (partial)** — dbt reads the Delta table in place via DuckDB
+- **Bronze users** — `python pipelines/bronze_users.py` ingests `Users.xml`.
+  71,811 rows (the second baseline).
+- **Silver + gold** — dbt reads the Delta tables in place via DuckDB
   `delta_scan` (no copy) and builds:
   - `stg_posts` (silver view) — cleaned, typed, tags as an array, post types labelled
+  - `stg_users` (silver view) — cleaned, typed, blank strings collapsed to NULL
   - `marts_top_tags` (gold table) — top-N tags, default 100
-- **Tests** — 26 pytest tests + 11 dbt tests, all green. `ruff` clean.
+  - `marts_posts_users` (gold table) — one row per post + its author, 26,764 rows
+- **Tests** — 40 pytest tests + 20 dbt tests, all green. `ruff` clean.
 - **Docs** — `AGENTS.md` in every directory, `ROADMAP.md`, `README.md`, and
   `docs/adr/0001` (UTC timezone) + `0002` (delete unexercised artifacts).
+- **Users layer (2026-08-19)** — bronze users, `stg_users` and
+  `marts_posts_users`, with both notebook defects fixed during the port
+  (`owner_user_id` kept alongside `user_id`; `unique` test on
+  `stg_users.user_id` guarding the grain). `author_status` distinguishes
+  resolved / unresolved / anonymous authors.
 - **Housekeeping (2026-08-19)** — deleted the empty `src/dataflow/silver/`,
   `src/dataflow/gold/`, `pipelines/silver_posts.py` and
   `pipelines/gold_analytics.py` stubs (ADR 0002: nothing exercised them, and the
@@ -42,41 +51,27 @@ anyone who clones it.
 
 ## What's left
 
-In priority order. Only the first two are "core"; the rest is polish.
+In priority order. Only the first is "core"; the rest is polish.
 
-### 1. Users layer → final gold table  (next up)
-
-Completes the data story. `src/dataflow/bronze/users.py` is an empty stub;
-`data/ai.stackexchange.com/Users.xml` (21MB) is present.
-
-- `bronze/users.py` + entrypoint + config entry + tests — mirror bronze posts exactly
-- Users schema (from the notebook extraction): AboutMe, AccountId, CreationDate,
-  DisplayName, DownVotes, Id, LastAccessDate, Location, Reputation, UpVotes,
-  Views, WebsiteUrl
-- `stg_users` (silver view)
-- `marts_posts_users` (gold table): `stg_posts LEFT JOIN stg_users ON owner_user_id = user_id`
-  - **Fixes to apply during the port** (found in review / notebook analysis):
-    - keep `owner_user_id` in the output (the notebook dropped it, so a missed
-      join lost the id entirely)
-    - add a `unique` test on `stg_users.user_id` — a duplicate would fan out the
-      join and break the one-row-per-post grain
-
-### 2. Airflow 3 + Cosmos orchestration  (the finale)
+### 1. Airflow 3 + Cosmos orchestration  (the finale — next up)
 
 Install group already exists: `uv sync --group orchestration` (Airflow 3.2.0).
 
 - Fix `orchestration/airflow_dags/bronze_posts_pipeline.py` — it uses
   `schedule_interval` (removed in Airflow 3.0 → `schedule`), builds its own
   Spark session without Delta, and imports `src.dataflow` (should be `dataflow`).
-- DAG shape: bronze (PythonOperator → `pipelines.bronze_posts.main`) → dbt models
-  rendered per-model by Cosmos.
+- DAG shape: two bronze PythonOperators (`pipelines.bronze_posts.main`,
+  `pipelines.bronze_users.main`) → dbt models rendered per-model by Cosmos.
+  The two bronze tasks are independent and can run in parallel; every dbt model
+  depends on both only through the source it reads, so let Cosmos work that out
+  rather than forcing a linear chain.
 
-### 3. Polish
+### 2. Polish
 
 - **CI** (GitHub Actions): run `pytest` + `dbt build` on a fixture on every push.
 - **More ADRs**: Spark-for-bronze-only, why DuckDB/local-first. (The Spark/dbt
   boundary reasoning is currently only in `AGENTS.md`.)
-- **README**: refresh once users + Airflow land.
+- **README**: refreshed for the users layer; refresh again once Airflow lands.
 
 ## Deliberately shelved (see ROADMAP.md)
 
@@ -90,7 +85,8 @@ Install group already exists: `uv sync --group orchestration` (Airflow 3.2.0).
 uv sync --group dbt                              # deps (add --group orchestration for Airflow)
 uv pip install -e . --no-deps                    # make `dataflow` importable
 python pipelines/bronze_posts.py                 # bronze: Posts.xml -> Delta (26,764 rows)
-dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + tests
-pytest                                           # 26 tests
-ruff check .                                      # lint
+python pipelines/bronze_users.py                 # bronze: Users.xml -> Delta (71,811 rows)
+dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + 20 dbt tests
+pytest                                           # 40 tests, ~2min
+ruff check .                                     # lint
 ```

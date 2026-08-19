@@ -6,8 +6,9 @@ Rationale for each choice lives in `docs/adr/`.
 ## Target architecture
 
 ```
-Posts.xml ──[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
-                                                    |
+Posts.xml ──┐
+            ├─[Spark]──> bronze (Delta) ──[dbt]──> silver ──[dbt]──> gold
+Users.xml ──┘                                       |
                                               [Airflow + Cosmos]
 ```
 
@@ -21,7 +22,7 @@ Everything downstream is SQL, so it belongs in dbt.
 | 1 | Repo hygiene — packaging, `uv`, `.gitignore` | done |
 | 2 | Single entrypoint + real `common/` (Spark factory, config loader) | done |
 | 3 | Tests for the bronze layer | done |
-| 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | in progress — `stg_posts` + `marts_top_tags` done; `marts_posts_users` needs bronze users |
+| 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | done — `stg_posts`, `stg_users`, `marts_top_tags`, `marts_posts_users` |
 | 5 | Airflow 3 + Cosmos orchestration | todo |
 | 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | in progress — ADRs 0001–0002 and per-directory `AGENTS.md` done |
 

@@ -3,12 +3,19 @@ version: 2
 sources:
   - name: bronze
     description: >
-      The Delta table written by the Spark bronze job. dbt reads it through
-      DuckDB's delta_scan() rather than copying it — one storage layer, and
-      the same table Databricks would read in production.
-    meta:
-      # dbt-duckdb swaps {{ source('bronze', 'posts') }} for this expression.
-      external_location: "delta_scan('{{ var('bronze_posts_path') }}')"
+      The Delta tables written by the Spark bronze jobs. dbt reads them through
+      DuckDB's delta_scan() rather than copying them — one storage layer, and
+      the same tables Databricks would read in production.
     tables:
       - name: posts
         description: Raw posts, one row per Stack Exchange post. 26,764 rows.
+        meta:
+          # dbt-duckdb swaps {{ source('bronze', 'posts') }} for this expression.
+          # Per-table rather than per-source: each bronze job writes its own
+          # Delta table, so each needs its own path.
+          external_location: "delta_scan('{{ var('bronze_posts_path') }}')"
+
+      - name: users
+        description: Raw users, one row per Stack Exchange account. 71,811 rows.
+        meta:
+          external_location: "delta_scan('{{ var('bronze_users_path') }}')"

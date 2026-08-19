@@ -6,7 +6,9 @@ reads it and builds silver + gold as SQL.
 ## Run it
 
 ```bash
-# bronze must exist first: python pipelines/bronze_posts.py
+# bronze must exist first:
+#   python pipelines/bronze_posts.py
+#   python pipelines/bronze_users.py
 dbt build   --project-dir dbt --profiles-dir dbt   # seed + models + tests
 dbt test    --project-dir dbt --profiles-dir dbt   # tests only
 dbt docs generate --project-dir dbt --profiles-dir dbt
@@ -18,9 +20,13 @@ relative to it.
 ## How dbt reads bronze
 
 DuckDB's `delta_scan()`, wired through a dbt source. `models/staging/_bronze__sources.yml`
-sets `external_location: "delta_scan('{{ var('bronze_posts_path') }}')"`, so
-`{{ source('bronze', 'posts') }}` reads the Delta table in place. **No copy** —
-one storage layer, and the same table Databricks would read in production.
+sets `external_location: "delta_scan('{{ var('bronze_posts_path') }}')"` per
+table, so `{{ source('bronze', 'posts') }}` reads the Delta table in place.
+**No copy** — one storage layer, and the same tables Databricks would read in
+production.
+
+`external_location` is set per *table*, not on the source, because each bronze
+job writes its own Delta directory and each needs its own path var.
 
 ## Layout
 
@@ -29,9 +35,11 @@ seeds/post_types.csv       PostTypeId -> label lookup (was an in-notebook DataFr
 models/staging/
   _bronze__sources.yml     the Delta table as a dbt source
   stg_posts.sql            silver: clean, type, tag-split, label      (view)
-  stg_posts.yml            tests + docs
+  stg_users.sql            silver: clean, type, blank -> null         (view)
+  *.yml                    tests + docs, one per model
 models/marts/
   marts_top_tags.sql       gold: top-N tags by post count             (table)
+  marts_posts_users.sql    gold: one row per post + its author        (table)
 tests/                     singular tests (one SQL query = one assertion)
 ```
 
@@ -60,8 +68,24 @@ The notebooks had defects; these were corrected here, not carried over:
 - **Limit contradiction.** Notebook code said 10, its docs said 100. Now
   `var('top_tags_limit')`, default 100.
 - **Unmapped post types.** Ids not in the seed become `'Unknown'`, not NULL.
+- **A lost join key.** `gold_posts_users.ipynb` selected `u.Id as UserId` and
+  never carried `p.OwnerUserId` through, so a post whose author did not match
+  came back with no author id at all — indistinguishable from a post that never
+  had one. `marts_posts_users` keeps both columns and adds `author_status` to
+  say which case a row is.
+- **An unguarded grain.** The notebook assumed one row per user without checking.
+  `stg_users.user_id` now has a `unique` test: a duplicate would fan the join
+  out silently and inflate every count downstream, rather than fail.
+
+## The grain rule
+
+`marts_posts_users` is one row per post. That holds only because
+`stg_users.user_id` is unique, and that is enforced by a test upstream rather
+than assumed in the join. `unique` on `marts_posts_users.post_id` is the
+belt-and-braces half: if the invariant ever broke, it fails at both ends.
 
 ## Not here yet
 
-`marts_posts_users` — needs a bronze `users` table, which does not exist yet
-(`src/dataflow/bronze/users.py` is an empty stub). That is the next increment.
+Nothing. Both gold marts from the notebooks are ported. Next work on this layer
+is orchestration (Cosmos renders each model as its own Airflow task), not new
+models.

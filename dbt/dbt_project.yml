@@ -13,6 +13,7 @@ vars:
   # DuckDB's delta_scan(); see models/staging/_bronze__sources.yml.
   # Relative to where dbt is invoked (the repo root, via `dbt --project-dir dbt`).
   bronze_posts_path: "spark-warehouse/bronze.db/posts"
+  bronze_users_path: "spark-warehouse/bronze.db/users"
 
   # marts_top_tags: how many tags to keep. The original notebook's code said 10
   # while its own docs said 100; making it a var ends the disagreement and lets

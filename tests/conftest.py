@@ -41,3 +41,15 @@ def posts_xml() -> str:
     fixtures tend to leave out.
     """
     return str(FIXTURES_DIR / "posts_sample.xml")
+
+
+@pytest.fixture(scope="session")
+def users_xml() -> str:
+    """Path to a 5-row sample of the real Users.xml.
+
+    Chosen, not random: the Community pseudo-user (Id=-1), a user with every
+    optional field filled, one with none of them, and two where an optional
+    field is present but empty. Those distinctions are what bronze has to
+    preserve, and synthetic rows would not have them.
+    """
+    return str(FIXTURES_DIR / "users_sample.xml")

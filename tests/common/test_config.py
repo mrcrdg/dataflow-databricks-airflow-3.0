@@ -121,3 +121,18 @@ def test_real_config_is_valid_and_complete():
     assert cfg["source_path"].endswith(".xml")
     assert cfg["table"] == "bronze.posts"
     assert cfg["write_mode"] in {"overwrite", "append"}
+
+
+def test_real_config_declares_the_users_job():
+    """Same guarantee as posts: the committed config must match the code.
+
+    `source_path` is the one that bites — the old config pointed at a CSV that
+    never existed. `row_tag` is the option that actually selects rows; get it
+    wrong and the job writes zero rows and reports success.
+    """
+    cfg = job_config("bronze", "users")
+
+    assert cfg["source_path"].endswith("Users.xml")
+    assert cfg["row_tag"] == "row"
+    assert cfg["table"] == "bronze.users"
+    assert cfg["write_mode"] in {"overwrite", "append"}
