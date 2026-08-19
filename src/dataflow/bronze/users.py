@@ -5,7 +5,7 @@ attribute name, and lands the result as a Delta table. No business logic here �
 bronze is a faithful, typed copy of the source. Cleaning happens in silver.
 
 Deliberately mirrors `bronze/posts.py` rather than sharing a generic ingest
-helper with it. The two modules differ in schema, root tag and log lines, so a
+helper with it. The two modules differ in schema, column set and log lines, so a
 shared helper would be parameterised on almost everything it does — the same
 trade that got `common/io.py` deleted. See `src/dataflow/AGENTS.md`.
 """
@@ -49,13 +49,14 @@ USERS_SCHEMA = StructType(
 def load_raw_users(
     spark: SparkSession,
     path: str,
-    root_tag: str = "users",
     row_tag: str = "row",
 ) -> DataFrame:
     """Read Users.xml into a DataFrame using the declared schema."""
+    # No `rootTag` option: on read, Spark's XML reader ignores it entirely —
+    # only `rowTag` selects rows. Setting it suggested a control that did not
+    # exist. See tests/bronze/test_users.py for the failure mode.
     return (
         spark.read.format("xml")
-        .option("rootTag", root_tag)
         .option("rowTag", row_tag)
         .schema(USERS_SCHEMA)
         .load(path)
@@ -85,13 +86,12 @@ def run(
     spark: SparkSession,
     source_path: str,
     table: str,
-    root_tag: str = "users",
     row_tag: str = "row",
     write_mode: str = "overwrite",
 ) -> int:
     """Run the bronze users ingestion. Returns the number of rows written."""
     logger.info("Reading raw users from %s", source_path)
-    df = clean_columns(load_raw_users(spark, source_path, root_tag, row_tag))
+    df = clean_columns(load_raw_users(spark, source_path, row_tag))
 
     row_count = df.count()
     logger.info("Writing %s rows to %s (mode=%s)", row_count, table, write_mode)

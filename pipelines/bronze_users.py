@@ -37,7 +37,6 @@ def main() -> int:
         spark,
         source_path=resolve_path(cfg["source_path"]),
         table=cfg["table"],
-        root_tag=cfg.get("root_tag", "users"),
         row_tag=cfg.get("row_tag", "row"),
         write_mode=cfg.get("write_mode", "overwrite"),
     )
