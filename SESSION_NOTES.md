@@ -28,7 +28,8 @@ anyone who clones it.
   Cosmos 1.15. Two parallel bronze tasks, then every dbt model as its own task
   (12 tasks total). Verified with `airflow dags test lakehouse`: 12/12 succeeded,
   240s, row counts unchanged.
-- **CI** — `.github/workflows/ci.yml`. On every PR: `ruff`, `pytest`, then real
+- **CI** — `.github/workflows/ci.yml`, green on PR #3 in 2m18s. On every PR:
+  `ruff`, `pytest`, then real
   bronze ingestion from the committed XML fixtures (`configs/pipeline.ci.yaml`)
   and a full `dbt build` against the result, followed by an assertion on the row
   counts. Nothing generated is committed. The fixture join covers the
@@ -37,9 +38,10 @@ anyone who clones it.
 - **Docs** — `AGENTS.md` in every directory, `ROADMAP.md`, `README.md`, and
   `docs/adr/0001` (UTC timezone), `0002` (delete unexercised artifacts),
   `0003` (resolve config paths against the project root).
-- **CI (2026-08-19)** — GitHub Actions, dry-run locally before pushing: bronze
-  on fixtures produced 5 + 5 rows, `dbt build` passed 25 nodes, and the assertion
-  script returned `{'resolved': 3, 'unresolved': 2}`.
+- **CI (2026-08-19)** — GitHub Actions. Dry-run locally first, then verified
+  green on GitHub: run 32264947283, **2m18s**, all steps passing — ruff, 57
+  pytest tests in 61s, bronze 5 + 5 rows from the fixtures, `dbt build` 25 nodes,
+  and the assertion step reporting `{'resolved': 3, 'unresolved': 2}`.
 - **Orchestration (2026-08-19)** — the `lakehouse` DAG, plus the path-resolution
   fix it needed (`resolve_path()`, ADR 0003). The old broken
   `bronze_posts_pipeline.py` is deleted.
