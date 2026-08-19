@@ -69,6 +69,20 @@ machine, or a deployment someone actually needs. Until then, `ROADMAP.md` keeps
 Databricks listed as deferred with this reasoning, so it reads as scope control
 rather than an omission.
 
+## Addendum, 2026-08-19
+
+The claim above — "an adapter swap, not a rewrite" — was tested for the first
+time when the Databricks target was added, and it needed qualifying. Three
+DuckDB-only functions and one quoting habit had to change before the same models
+could compile anywhere else; the worst of them, double-quoted column names,
+would have compiled on Databricks as string literals rather than failing. The
+functions now dispatch on the adapter in `dbt/macros/portable_sql.sql`, and
+`docs/databricks.md` records what it cost.
+
+The decision stands and the reasoning is unchanged. What changed is the
+confidence: the portability was an assumption, and assumptions in this project
+have a track record.
+
 ## Notes
 
 The general form, shared with ADR 0002: **an artifact nobody can exercise will

@@ -15,23 +15,23 @@ with users as (
 
 final as (
     select
-        u."Id"              as user_id,
-        u."AccountId"       as account_id,
-        u."DisplayName"     as display_name,
+        u.Id              as user_id,
+        u.AccountId       as account_id,
+        u.DisplayName     as display_name,
 
-        u."Reputation"      as reputation,
-        u."UpVotes"         as up_votes,
-        u."DownVotes"       as down_votes,
-        u."Views"           as profile_views,
+        u.Reputation      as reputation,
+        u.UpVotes         as up_votes,
+        u.DownVotes       as down_votes,
+        u.Views           as profile_views,
 
         -- Present-but-empty and absent are different in the source, and both
         -- occur. nullif collapses them here, in silver, where that decision
         -- belongs — bronze keeps them apart.
-        nullif(u."Location", '')    as location,
-        nullif(u."WebsiteUrl", '')  as website_url,
+        nullif(u.Location, '')    as location,
+        nullif(u.WebsiteUrl, '')  as website_url,
 
-        u."CreationDate"    as creation_date,
-        u."LastAccessDate"  as last_access_date
+        u.CreationDate    as creation_date,
+        u.LastAccessDate  as last_access_date
 
     from users u
 )

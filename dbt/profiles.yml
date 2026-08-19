@@ -4,8 +4,13 @@
 # `dbt build` works with no per-machine setup. Invoke with
 # `dbt build --project-dir dbt --profiles-dir dbt`.
 #
-# There are no secrets here — DuckDB is a local file. That is the whole reason
-# this can be committed at all.
+# There are no secrets here — DuckDB is a local file, and the Databricks target
+# reads every credential from the environment. That is the whole reason this can
+# be committed at all.
+#
+# Every env_var below carries a default. dbt renders this entire file on every
+# invocation, whichever target is selected, so a bare env_var('DATABRICKS_HOST')
+# would break `dbt build` on a laptop that has never heard of Databricks.
 
 dataflow:
   target: dev
@@ -23,3 +28,19 @@ dataflow:
       # DuckDB reads the bronze Delta table via this extension.
       extensions:
         - delta
+
+    # Databricks — the documented production target (ADR 0005), opt in with
+    # `--target databricks`. Needs `uv sync --group databricks` and four
+    # environment variables; see docs/databricks.md for where each comes from.
+    #
+    # Bronze is a real table here (catalog.bronze.posts), not a delta_scan()
+    # over a local folder — which is why the source's external_location lives
+    # under `meta` and is simply ignored by this adapter.
+    databricks:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', '') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', '') }}"
+      token: "{{ env_var('DATABRICKS_TOKEN', '') }}"
+      catalog: "{{ env_var('DATABRICKS_CATALOG', 'workspace') }}"
+      schema: "{{ env_var('DATABRICKS_SCHEMA', 'dataflow') }}"
+      threads: 4
