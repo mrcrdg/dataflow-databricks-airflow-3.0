@@ -10,16 +10,15 @@ spark:
 bronze:
   posts:
     source_path: data/ai.stackexchange.com/Posts.xml
-    root_tag: posts
     row_tag: row
     table: bronze.posts
-    # Bronze is a full refresh of the raw dump. Incremental loading belongs
-    # downstream, in dbt incremental models. See ROADMAP.md.
+    # Bronze is a full refresh of the raw dump: the source is a static
+    # archive, so there is nothing to load incrementally. No dbt model
+    # downstream is incremental either.
     write_mode: overwrite
 
   users:
     source_path: data/ai.stackexchange.com/Users.xml
-    root_tag: users
     row_tag: row
     table: bronze.users
     write_mode: overwrite

@@ -55,13 +55,14 @@ POSTS_SCHEMA = StructType(
 def load_raw_posts(
     spark: SparkSession,
     path: str,
-    root_tag: str = "posts",
     row_tag: str = "row",
 ) -> DataFrame:
     """Read Posts.xml into a DataFrame using the declared schema."""
+    # No `rootTag` option: on read, Spark's XML reader ignores it entirely —
+    # only `rowTag` selects rows. Setting it suggested a control that did not
+    # exist. See tests/bronze/test_users.py for the failure mode.
     return (
         spark.read.format("xml")
-        .option("rootTag", root_tag)
         .option("rowTag", row_tag)
         .schema(POSTS_SCHEMA)
         .load(path)
@@ -91,13 +92,12 @@ def run(
     spark: SparkSession,
     source_path: str,
     table: str,
-    root_tag: str = "posts",
     row_tag: str = "row",
     write_mode: str = "overwrite",
 ) -> int:
     """Run the bronze posts ingestion. Returns the number of rows written."""
     logger.info("Reading raw posts from %s", source_path)
-    df = clean_columns(load_raw_posts(spark, source_path, root_tag, row_tag))
+    df = clean_columns(load_raw_posts(spark, source_path, row_tag))
 
     row_count = df.count()
     logger.info("Writing %s rows to %s (mode=%s)", row_count, table, write_mode)

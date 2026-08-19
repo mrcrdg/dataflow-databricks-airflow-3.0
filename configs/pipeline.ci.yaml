@@ -18,14 +18,12 @@ spark:
 bronze:
   posts:
     source_path: tests/fixtures/posts_sample.xml
-    root_tag: posts
     row_tag: row
     table: bronze.posts
     write_mode: overwrite
 
   users:
     source_path: tests/fixtures/users_sample.xml
-    root_tag: users
     row_tag: row
     table: bronze.users
     write_mode: overwrite

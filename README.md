@@ -28,6 +28,7 @@ incremental logic for free; re-implementing those in PySpark would be rebuilding
 dbt badly.
 
 That boundary is the whole architecture. Everything else follows from it.
+Written up in [ADR 0004](docs/adr/0004-spark-only-at-bronze.md).
 
 ## Status
 
@@ -38,8 +39,10 @@ That boundary is the whole architecture. Everything else follows from it.
 | Gold — `marts_top_tags`, `marts_posts_users` | **working** — dbt tables |
 | Orchestration — Airflow 3 + Cosmos | **working** — 12 tasks, verified end to end |
 
-57 pytest tests and 20 dbt tests, all green, and CI runs every one of them on
-every push — including the dbt models, built from the committed fixtures.
+65 pytest tests and 20 dbt tests, all green, and CI runs every one of them on
+every push — including the dbt models, built from the committed fixtures. Eight
+of the pytest tests import Airflow and skip unless the orchestration extras are
+installed.
 
 Scope decisions, including what was deliberately left out and why, are in
 [ROADMAP.md](ROADMAP.md).
@@ -78,8 +81,17 @@ airflow dags test lakehouse         # bronze x2, then every dbt model as a task
 ```
 
 The pytest suite runs against small fixtures cut from the real dump, so it works
-without downloading the 191MB archive. `dbt build` needs the bronze tables, so
-it needs the real thing.
+without downloading the 191MB archive. `dbt build` needs bronze tables to read,
+so the commands above need the real dump — but you can build the whole dbt
+project on the fixtures instead, which is exactly what CI does:
+
+```bash
+DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_posts.py
+DATAFLOW_CONFIG=configs/pipeline.ci.yaml python pipelines/bronze_users.py
+DATAFLOW_DUCKDB_PATH=$PWD/ci.duckdb dbt build --project-dir dbt --profiles-dir dbt \
+  --vars "{bronze_posts_path: $PWD/ci-warehouse/bronze.db/posts, \
+           bronze_users_path: $PWD/ci-warehouse/bronze.db/users}"
+```
 
 ## Layout
 
@@ -107,7 +119,9 @@ credentials is a project nobody can run** — including whoever is reviewing it.
 
 dbt makes this a swap of adapter rather than a rewrite: `dbt-duckdb` locally,
 `dbt-databricks` in the cloud, same models. Databricks remains the documented
-production target. See [ROADMAP.md](ROADMAP.md).
+production target. Written up in
+[ADR 0005](docs/adr/0005-duckdb-local-first.md); scope in
+[ROADMAP.md](ROADMAP.md).
 
 ## On scale, honestly
 

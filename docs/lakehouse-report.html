@@ -521,8 +521,8 @@
     </p>
     <div class="meta">
       <span>repo · dataflow-databricks-airflow-3.0</span>
-      <span>branch · refactor/local-first-lakehouse</span>
-      <span>open PR · #3</span>
+      <span>branch · main</span>
+      <span>PR #3 · merged</span>
       <span>CI · passing</span>
     </div>
   </header>
@@ -817,6 +817,7 @@
       </p>
       <p>
         Every other structural choice in the project follows from that one boundary.
+        <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0004</span>
       </p>
     </div>
   </section>
@@ -1057,7 +1058,9 @@
         <p style="font-size:.94rem;margin-bottom:0">
           Worth knowing because getting the <em>other</em> one wrong returns zero rows
           rather than raising an error — a job that writes nothing and reports success.
-          Now covered by a test.
+          Now covered by a test, and the setting that did nothing has been deleted from
+          the config and both ingestion modules — a knob with no effect invites someone
+          to turn it.
         </p>
       </div>
 
@@ -1272,7 +1275,7 @@
             <td>GitHub Actions, 2 m 18 s, green.</td>
           </tr>
           <tr>
-            <td>Documentation — guides in every folder, 3 ADRs</td>
+            <td>Documentation — guides in every folder, 5 ADRs</td>
             <td><span class="status done">Done</span></td>
             <td>Plus a running notes file so any session can resume cold, and this
             report, which lives in the repo at <code>docs/lakehouse-report.html</code>
@@ -1283,8 +1286,8 @@
     </div>
 
     <p>
-      All seven planned stages are complete. The work currently sits on one branch with an
-      open pull request.
+      All seven planned stages are complete, reviewed and merged into
+      <span class="mono">main</span>.
     </p>
   </section>
 
@@ -1307,24 +1310,24 @@
         </thead>
         <tbody>
           <tr>
-            <td><strong>Merge the open pull request</strong></td>
-            <td><span class="status todo">Admin</span></td>
-            <td>Four commits — the dbt layer, the users layer, orchestration and CI — are on a branch awaiting review. CI is green on it.</td>
+            <td><strong>No cloud demonstration</strong></td>
+            <td><span class="status todo">By choice</span></td>
+            <td>Nothing here shows a cluster being sized, a workspace configured, or a job scheduled on a managed platform. That is the price of running everywhere for free, and it is stated rather than hidden. <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0005</span></td>
           </tr>
           <tr>
-            <td><strong>Remove a dead setting</strong></td>
-            <td><span class="status todo">Small</span></td>
-            <td>The <code>root_tag</code> option is threaded through the config and both ingestion modules, and does nothing — the reader ignores it. Left alone deliberately so it gets its own reviewable commit rather than being buried in a large change.</td>
+            <td><strong>The two engines are only checked at the seam</strong></td>
+            <td><span class="status todo">Known</span></td>
+            <td>Spark writes a Delta folder, dbt reads it by path, and nothing verifies the two agree except CI actually running both. A model that builds on DuckDB could still fail on a different warehouse.</td>
           </tr>
           <tr>
-            <td><strong>Two more ADRs</strong></td>
+            <td><strong>Nothing is incremental</strong></td>
             <td><span class="status todo">Small</span></td>
-            <td>The reasoning for "Spark only at bronze" and for choosing DuckDB and local-first currently lives only in the project guide, not as standalone decision records.</td>
+            <td>Every run rebuilds every layer from the raw archive. Correct, and fast enough at this size — but it is the first thing that would have to change if the source ever grew or started updating.</td>
           </tr>
           <tr>
-            <td><strong>Refresh the README</strong></td>
-            <td><span class="status todo">Small</span></td>
-            <td>Updated as things landed, but worth a full read-through now the shape is final.</td>
+            <td><strong>The README is checked only by a person</strong></td>
+            <td><span class="status todo">Known</span></td>
+            <td>This report is verified by tests; the README is not, which makes it the most likely file to drift next. Kept short and factual to limit the surface.</td>
           </tr>
         </tbody>
       </table>
@@ -1340,6 +1343,7 @@
           requirement because <em>a project that needs cloud credentials is a project
           nobody can run</em> — including a reviewer. dbt makes it a swap of one adapter,
           not a rewrite, so it can return when there is a reason to pay for it.
+          <span class="mono" style="font-size:.8rem;color:var(--muted)">ADR 0005</span>
         </p>
       </div>
       <div class="panel">
@@ -1447,8 +1451,8 @@ dbt build --project-dir dbt --profiles-dir dbt --vars "{...fixture paths...}"
 
   <footer>
     <p>
-      Report generated 19 August 2026 from the state of branch
-      <span class="mono">refactor/local-first-lakehouse</span>. All figures — row counts,
+      Report generated 19 August 2026 from the state of <span class="mono">main</span>,
+      after PR&nbsp;#3 was merged. All figures — row counts,
       test counts, run durations — are measured values from actual runs, not estimates.
     </p>
     <p style="margin-bottom:0">

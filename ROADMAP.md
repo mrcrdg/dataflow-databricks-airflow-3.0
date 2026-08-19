@@ -24,7 +24,7 @@ Everything downstream is SQL, so it belongs in dbt.
 | 3 | Tests for the bronze layer | done |
 | 4 | dbt-duckdb: silver + gold ported from notebooks, with dbt tests | done — `stg_posts`, `stg_users`, `marts_top_tags`, `marts_posts_users` |
 | 5 | Airflow 3 + Cosmos orchestration | done — `lakehouse` DAG, 12 tasks, verified end to end |
-| 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | in progress — ADRs 0001–0003 and per-directory `AGENTS.md` done |
+| 6 | Docs: README, ADRs, `CLAUDE.md`, "How I used AI" | done — ADRs 0001–0005, per-directory `AGENTS.md`, and `docs/lakehouse-report.html` |
 | 7 | CI: lint, tests and the full dbt DAG on every push | done — builds bronze from the fixtures, ~2m18s, no generated artifact committed |
 
 Current state, and what is being worked on next, is tracked in `SESSION_NOTES.md`.
@@ -34,6 +34,8 @@ Current state, and what is being worked on next, is tracked in `SESSION_NOTES.md
 These were considered and deferred. They are not oversights.
 
 ### Databricks as production target
+
+Recorded as `docs/adr/0005-duckdb-local-first.md`.
 
 The pipeline was originally prototyped on Databricks (see `notebooks/`), but the
 runnable version targets **DuckDB locally**.
