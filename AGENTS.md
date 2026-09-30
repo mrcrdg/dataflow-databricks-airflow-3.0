@@ -34,7 +34,7 @@ See `docs/adr/0004`.
 **DuckDB, locally.** The project must be runnable by anyone who clones it — no
 cloud credentials, no paid account. Databricks was the original prototype
 environment (see `notebooks/`) and remains the documented production target, but
-is deliberately out of scope. See `docs/adr/0005` and `ROADMAP.md`.
+is deliberately out of scope. See `docs/adr/0005` and `docs/ROADMAP.md`.
 
 ## Conventions
 

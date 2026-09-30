@@ -33,7 +33,7 @@ Applied here:
   which is a known weakness; keeping it short and factual limits the surface.
 - `Dockerfile` — **deleted.** It could not be built or tested in the development
   environment, so shipping it would mean publishing unverified code as working.
-  Recorded in `ROADMAP.md`; it returns only alongside a CI job that builds the
+  Recorded in `docs/ROADMAP.md`; it returns only alongside a CI job that builds the
   image and runs a pipeline in it.
 
 Deletion is the default when an artifact cannot be exercised. Git preserves it,
@@ -53,7 +53,7 @@ so nothing is lost that cannot be recovered.
 - The project ships without a container image, which some readers will expect.
 - `README.md` is still verified only by human attention, so it remains the most
   likely thing to drift next. Mitigated by keeping it factual and linking to
-  `ROADMAP.md` rather than restating scope in two places.
+  `docs/ROADMAP.md` rather than restating scope in two places.
 
 ## Notes
 

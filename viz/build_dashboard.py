@@ -1,6 +1,6 @@
 """Build a static dashboard page from the gold tables.
 
-The "generated HTML page" option in ROADMAP.md § Visualisation: one script, no
+The "generated HTML page" option in docs/ROADMAP.md § Visualisation: one script, no
 server, no new service. It reads the gold tables and writes a self-contained
 page — charts are hand-authored SVG, so the output has no runtime dependency and
 opens from disk in any browser.

@@ -57,7 +57,7 @@ The source is a static archive dump. A daily schedule would re-ingest identical
 bytes every morning and present that as a pipeline. Trigger it when a new dump
 is downloaded, which is the real cadence.
 
-This is the same reasoning that keeps streaming out of scope — see `ROADMAP.md`.
+This is the same reasoning that keeps streaming out of scope — see `docs/ROADMAP.md`.
 
 ## Verifying it
 
