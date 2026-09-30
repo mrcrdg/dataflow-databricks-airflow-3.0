@@ -27,7 +27,7 @@ empty database instead of failing.
 ## Why a script and not a BI tool
 
 Metabase, Superset and Evidence were considered; the reasoning is in
-`ROADMAP.md` § Visualisation. The short version: a BI server holding the DuckDB
+`docs/ROADMAP.md` § Visualisation. The short version: a BI server holding the DuckDB
 file open blocks `dbt build` from writing it, because DuckDB allows one writer at
 a time. A script that runs, writes a file and exits has no such conflict.
 

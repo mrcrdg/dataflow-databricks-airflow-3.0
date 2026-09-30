@@ -45,7 +45,7 @@ of the pytest tests import Airflow and skip unless the orchestration extras are
 installed.
 
 Scope decisions, including what was deliberately left out and why, are in
-[ROADMAP.md](ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 **New here?** Start with [`OVERVIEW.md`](OVERVIEW.md) — a short, plain-language
 tour with diagrams, written for someone who knows nothing about the project or
@@ -123,7 +123,7 @@ dbt makes this a swap of adapter rather than a rewrite: `dbt-duckdb` locally,
 `dbt-databricks` in the cloud, same models. Databricks remains the documented
 production target. Written up in
 [ADR 0005](docs/adr/0005-duckdb-local-first.md); scope in
-[ROADMAP.md](ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## On scale, honestly
 

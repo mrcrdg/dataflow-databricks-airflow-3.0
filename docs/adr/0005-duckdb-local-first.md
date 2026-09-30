@@ -65,7 +65,7 @@ same models — plus a Spark session that already comes from one factory
 **What would reverse this**
 
 A concrete reason to pay for it — a dataset that genuinely does not fit on one
-machine, or a deployment someone actually needs. Until then, `ROADMAP.md` keeps
+machine, or a deployment someone actually needs. Until then, `docs/ROADMAP.md` keeps
 Databricks listed as deferred with this reasoning, so it reads as scope control
 rather than an omission.
 

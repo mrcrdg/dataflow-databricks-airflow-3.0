@@ -40,7 +40,7 @@ Do the documents first, then the code.
 
 | File | Read it when… |
 |---|---|
-| `ROADMAP.md` | You want to know what is finished and what could come next |
+| `docs/ROADMAP.md` | You want to know what is finished and what could come next |
 | `docs/adr/0001` to `0003` | You are curious about a specific past decision (time zones, deleting unused files, file paths) |
 | `docs/databricks.md` | You want to run this on Databricks |
 
@@ -49,7 +49,7 @@ AI assistants, not explanations:
 
 - every `AGENTS.md` (there is one at the root and one in most folders)
 - `CLAUDE.md`
-- `SESSION_NOTES.md` (a log of what the last working session did)
+- `docs/SESSION_NOTES.md` (a log of what the last working session did)
 
 ### Path 2: the code
 
@@ -321,8 +321,8 @@ flowchart TB
 | `README.md` | Install and run the project. |
 | `docs/lakehouse-report.html` | Read a longer explanation, in a browser. |
 | `docs/adr/` | Understand **why** a decision was made (ADR = decision record). |
-| `ROADMAP.md` | See what is done and what could come next. |
-| `SESSION_NOTES.md` | Pick up where the last working session stopped. |
+| `docs/ROADMAP.md` | See what is done and what could come next. |
+| `docs/SESSION_NOTES.md` | Pick up where the last working session stopped. |
 | `AGENTS.md` | See the working rules for contributors, human or AI. |
 | `docs/databricks.md` | Run it on Databricks instead of your laptop. |
 
